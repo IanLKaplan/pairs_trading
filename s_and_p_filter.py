@@ -60,6 +60,7 @@ def process_files(path: str) -> pd.DataFrame:
             if prefix == 'sp-sectors---':
                 sector_df = process_file(path, file_name)
                 s_and_p_df = pd.concat([s_and_p_df, sector_df], axis=0)
+        s_and_p_df.index = range(0, s_and_p_df.shape[0])
         s_and_p_df.to_csv(path + os.path.sep + output_file_name)
     else:
         print(f'Could not read {path}')

@@ -1,15 +1,17 @@
-
 import os
-import pandas as pd
-from tabulate import tabulate
 from datetime import datetime
-from typing import List
-from pandas_datareader import data
 from datetime import timedelta
+
+import numpy as np
+import pandas as pd
+import yfinance as yf
+from tabulate import tabulate
+
+yf.pdr_override()
 
 s_and_p_file = 's_and_p_sector_components/sp_stocks.csv'
 s_and_p_data = 's_and_p_data'
-start_date_str = '2007-01-02'
+start_date_str = '2007-01-03'
 start_date: datetime = datetime.fromisoformat(start_date_str)
 
 
@@ -23,9 +25,12 @@ def convert_date(some_date):
 
 
 def read_stock_data(path: str) -> pd.DataFrame:
-    s_and_p_stocks = pd.DataFrame
+    s_and_p_stocks = pd.DataFrame()
     if os.access(path, os.R_OK):
-        s_and_p_stocks = pd.read_csv(s_and_p_file)
+        # s_and_p_socks columns are Symbol, Name and Sector
+        s_and_p_stocks = pd.read_csv(s_and_p_file, index_col=0)
+        new_names = [sym.replace('.', '-') for sym in s_and_p_stocks['Symbol']]
+        s_and_p_stocks['Symbol'] = new_names
     else:
         print(f'Could not read file {s_and_p_file}')
     return s_and_p_stocks
@@ -59,15 +64,16 @@ def calc_pair_counts(sector_info: dict) -> pd.DataFrame:
     for sector in sectors:
         n = len(sector_info[sector])
         n_l.append(n)
-        count = sum(range(1, n-1))
+        count = sum(range(1, n - 1))
         counts_l.append(count)
+    num_stocks = sum(n_l)
     info_df = pd.DataFrame(n_l)
     info_df = pd.concat([info_df, pd.DataFrame(counts_l)], axis=1)
     info_df.columns = column_label
     sum_pairs = sum(counts_l)
-    blank_df = pd.DataFrame([' '])
+    num_stocks_df = pd.DataFrame([num_stocks])
     sum_df = pd.DataFrame([sum_pairs])
-    row_df = pd.concat([blank_df, sum_df], axis=1)
+    row_df = pd.concat([num_stocks_df, sum_df], axis=1)
     row_df.columns = column_label
     info_df = pd.concat([info_df, row_df], axis=0)
     sectors.append('Sum')
@@ -75,29 +81,31 @@ def calc_pair_counts(sector_info: dict) -> pd.DataFrame:
     return info_df
 
 
-stock_info_df = read_stock_data(s_and_p_file)
-sectors = extract_sectors(stock_info_df)
-info_df = calc_pair_counts(sectors)
-
 class MarketData:
+    """
+    This class supports retrieving and storing stock market close data from Yahoo.
+    """
+
     def __init__(self, start_date: datetime, path: str):
         self.start_date = start_date
         self.path = path
         self.end_date: datetime = datetime.today() - timedelta(days=1)
 
     def get_market_data(self,
-                        symbols: List,
+                        symbol: str,
                         start_date: datetime,
                         end_date: datetime) -> pd.DataFrame:
-        data_source = 'yahoo'
         data_col = 'Close'
-        if type(symbols) == str:
+        if type(symbol) == str:
             t = list()
-            t.append(symbols)
+            t.append(symbol)
             symbols = t
-        panel_data: pd.DataFrame = data.DataReader(symbols, data_source, start_date, end_date)
-        close_data: pd.DataFrame = panel_data[data_col]
-        assert len(close_data) > 0, f'Error reading data for {symbols}'
+        panel_data = yf.download(tickers=symbol, start=start_date, end=end_date, progress=False)
+        if panel_data.shape[0] > 0:
+            close_data: pd.DataFrame = panel_data[data_col]
+        else:
+            close_data = pd.DataFrame()
+        close_data = close_data.round(2)
         return close_data
 
     def symbol_file_path(self, symbol: str) -> str:
@@ -110,26 +118,47 @@ class MarketData:
             symbol_df = pd.read_csv(file_path, index_col='Date')
             last_row = symbol_df.tail(1)
             last_date = convert_date(last_row.index[0])
-            if last_date < self.end_date:
+            if last_date.date() < self.end_date.date():
                 sym_start_date = last_date + timedelta(days=1)
                 new_data_df = self.get_market_data(symbol, sym_start_date, self.end_date)
                 symbol_df = pd.concat([symbol_df, new_data_df], axis=0)
                 symbol_df.to_csv(file_path)
         else:
             symbol_df = self.get_market_data(symbol, self.start_date, self.end_date)
-            if not os.access(self.path, os.R_OK):
-                os.mkdir(self.path)
-            symbol_df.to_csv(file_path)
+            if symbol_df.shape[0] > 0:
+                if not os.access(self.path, os.R_OK):
+                    os.mkdir(self.path)
+                symbol_df.to_csv(file_path)
+                if type(symbol_df) != pd.DataFrame:
+                    symbol_df = pd.DataFrame(symbol_df)
+        if symbol_df.shape[0] > 0:
+            symbol_df.columns = [symbol]
         return symbol_df
 
     def get_close_data(self, stock_list: list) -> pd.DataFrame:
         close_df = pd.DataFrame()
         for stock in stock_list:
             stock_df = self.read_data(stock)
-            close_df = pd.concat([close_df, stock_df], axis=1)
+            if stock_df.shape[0] > 0:
+                stock_start_date = convert_date(stock_df.head(1).index[0])
+                # filter out stocks with a start date that is later than self.start_date
+                if stock_start_date.date() == self.start_date.date():
+                    close_df = pd.concat([close_df, stock_df], axis=1)
         return close_df
 
 
+stock_info_df = read_stock_data(s_and_p_file)
 market_data = MarketData(start_date, s_and_p_data)
-xon_df = market_data.get_close_data(['XOM'])
-xon_df = market_data.get_close_data(['XOM'])
+stock_l: list = list(set(stock_info_df['Symbol']))
+stock_l.sort()
+close_prices_df = market_data.get_close_data(stock_l)
+final_stock_list = list(close_prices_df.columns)
+mask = stock_info_df['Symbol'].isin(final_stock_list)
+final_stock_info_df = stock_info_df[mask]
+
+sectors = extract_sectors(final_stock_info_df)
+pairs_info_df = calc_pair_counts(sectors)
+
+print(tabulate(pairs_info_df, headers=[*pairs_info_df.columns], tablefmt='fancy_grid'))
+
+pass
