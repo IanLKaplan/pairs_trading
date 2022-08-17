@@ -1,18 +1,21 @@
 import os
 from datetime import datetime
 from datetime import timedelta
+from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
 import yfinance as yf
+from numpy import log
 from tabulate import tabulate
 
-yf.pdr_override()
 
 s_and_p_file = 's_and_p_sector_components/sp_stocks.csv'
 s_and_p_data = 's_and_p_data'
 start_date_str = '2007-01-03'
 start_date: datetime = datetime.fromisoformat(start_date_str)
+
+trading_days = 252
 
 
 def convert_date(some_date):
@@ -64,7 +67,7 @@ def calc_pair_counts(sector_info: dict) -> pd.DataFrame:
     for sector in sectors:
         n = len(sector_info[sector])
         n_l.append(n)
-        count = sum(range(1, n - 1))
+        count = ((n ** 2.0) - n) / 2.0
         counts_l.append(count)
     num_stocks = sum(n_l)
     info_df = pd.DataFrame(n_l)
@@ -106,7 +109,8 @@ class MarketData:
         else:
             close_data = pd.DataFrame()
         close_data = close_data.round(2)
-        return close_data
+        close_data_df = pd.DataFrame(close_data)
+        return close_data_df
 
     def symbol_file_path(self, symbol: str) -> str:
         path: str = self.path + os.path.sep + symbol.upper() + '.csv'
@@ -122,6 +126,9 @@ class MarketData:
                 sym_start_date = last_date + timedelta(days=1)
                 new_data_df = self.get_market_data(symbol, sym_start_date, self.end_date)
                 symbol_df = pd.concat([symbol_df, new_data_df], axis=0)
+                ix = symbol_df.index
+                ix = pd.to_datetime(ix)
+                symbol_df.index = ix
                 symbol_df.to_csv(file_path)
         else:
             symbol_df = self.get_market_data(symbol, self.start_date, self.end_date)
@@ -160,5 +167,51 @@ sectors = extract_sectors(final_stock_info_df)
 pairs_info_df = calc_pair_counts(sectors)
 
 print(tabulate(pairs_info_df, headers=[*pairs_info_df.columns], tablefmt='fancy_grid'))
+
+
+def get_pairs(sector_info: dict) -> List[Tuple]:
+    pairs_list = list()
+    sectors = list(sector_info.keys())
+    for sector in sectors:
+        stocks = sector_info[sector]
+        num_stocks = len(stocks)
+        for i in range(num_stocks):
+            stock_a = stocks[i]
+            for j in range(i + 1, num_stocks):
+                stock_b = stocks[j]
+                pairs_list.append((stock_a, stock_b, sector))
+    return pairs_list
+
+
+def calc_pairs_correlation(stock_close_df: pd.DataFrame, pair: Tuple, window: int) -> pd.DataFrame:
+    cor_v = np.zeros(0)
+    stock_a = pair[0]
+    stock_b = pair[1]
+    a_close = stock_close_df[stock_a]
+    b_close = stock_close_df[stock_b]
+    a_log_close = log(a_close)
+    b_log_close = log(b_close)
+    assert len(a_log_close) == len(b_log_close)
+    for i in range(0, len(a_log_close), window):
+        sec_a = a_log_close[i:i + window]
+        sec_b = b_log_close[i:i+window]
+        c = np.corrcoef(sec_a, sec_b)
+        cor_v = np.append(cor_v, c[0,1])
+    return cor_v
+
+
+def calc_yearly_correlation(stock_close_df: pd.DataFrame, pairs_list: List[Tuple]) -> np.array:
+    all_cor_v = np.zeros(0)
+    for pair in pairs_list:
+        cor_v = calc_pairs_correlation(stock_close_df, pair, trading_days)
+        all_cor_v = np.append(all_cor_v, cor_v)
+    return all_cor_v
+
+
+pairs_list = get_pairs(sectors)
+
+yearly_cor_a = calc_yearly_correlation(close_prices_df, pairs_list)
+
+
 
 pass
