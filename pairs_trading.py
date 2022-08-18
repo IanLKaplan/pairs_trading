@@ -3,13 +3,12 @@ from datetime import datetime
 from datetime import timedelta
 from typing import List, Tuple
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import yfinance as yf
 from numpy import log
 from tabulate import tabulate
-import matplotlib.pyplot as plt
-
 
 s_and_p_file = 's_and_p_sector_components/sp_stocks.csv'
 s_and_p_data = 's_and_p_data'
@@ -125,12 +124,13 @@ class MarketData:
             last_date = convert_date(last_row.index[0])
             if last_date.date() < self.end_date.date():
                 sym_start_date = last_date + timedelta(days=1)
-                new_data_df = self.get_market_data(symbol, sym_start_date, self.end_date)
-                symbol_df = pd.concat([symbol_df, new_data_df], axis=0)
-                ix = symbol_df.index
-                ix = pd.to_datetime(ix)
-                symbol_df.index = ix
-                symbol_df.to_csv(file_path)
+                new_data_df = self.get_market_data(symbol, sym_start_date, datetime.today())
+                if new_data_df.shape[0] > 0:
+                    symbol_df = pd.concat([symbol_df, new_data_df], axis=0)
+                    ix = symbol_df.index
+                    ix = pd.to_datetime(ix)
+                    symbol_df.index = ix
+                    symbol_df.to_csv(file_path)
         else:
             symbol_df = self.get_market_data(symbol, self.start_date, self.end_date)
             if symbol_df.shape[0] > 0:
@@ -159,6 +159,7 @@ stock_info_df = read_stock_data(s_and_p_file)
 market_data = MarketData(start_date, s_and_p_data)
 stock_l: list = list(set(stock_info_df['Symbol']))
 stock_l.sort()
+# t = market_data.parallel_close_data(stock_l)
 close_prices_df = market_data.get_close_data(stock_l)
 final_stock_list = list(close_prices_df.columns)
 mask = stock_info_df['Symbol'].isin(final_stock_list)
@@ -184,7 +185,7 @@ def get_pairs(sector_info: dict) -> List[Tuple]:
     return pairs_list
 
 
-def calc_pairs_correlation(stock_close_df: pd.DataFrame, pair: Tuple, window: int) -> np.array:
+def calc_pairs_correlation(stock_close_df: pd.DataFrame, pair: Tuple, window: int, all_cor_v: np.array) -> np.array:
     cor_v = np.zeros(0)
     stock_a = pair[0]
     stock_b = pair[1]
@@ -195,7 +196,7 @@ def calc_pairs_correlation(stock_close_df: pd.DataFrame, pair: Tuple, window: in
     assert len(a_log_close) == len(b_log_close)
     for i in range(0, len(a_log_close), window):
         sec_a = a_log_close[i:i + window]
-        sec_b = b_log_close[i:i+window]
+        sec_b = b_log_close[i:i + window]
         c = np.corrcoef(sec_a, sec_b)
         cor_v = np.append(cor_v, c[0, 1])
     return cor_v
@@ -204,23 +205,29 @@ def calc_pairs_correlation(stock_close_df: pd.DataFrame, pair: Tuple, window: in
 def calc_yearly_correlation(stock_close_df: pd.DataFrame, pairs_list: List[Tuple]) -> np.array:
     all_cor_v = np.zeros(0)
     for pair in pairs_list:
-        cor_v = calc_pairs_correlation(stock_close_df, pair, trading_days)
+        cor_v: np.array = calc_pairs_correlation(stock_close_df, pair, trading_days, all_cor_v)
         all_cor_v = np.append(all_cor_v, cor_v)
     return all_cor_v
 
 
-pairs_list = get_pairs(sectors)
+def parallel_yearly_correlation(stock_close_df: pd.DataFrame, pairs_list: List[Tuple]) -> np.array:
+    pass
 
+
+def display_histogram(data_v: np.array, x_label: str, y_label: str) -> None:
+    num_bins = int(np.sqrt(data_v.shape[0])) * 4
+    fix, ax = plt.subplots(figsize=(10, 8))
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    ax.grid(True)
+    ax.hist(data_v, bins=num_bins, facecolor='b')
+    ax.axvline(x=np.mean(data_v), color='black')
+    plt.show()
+
+
+pairs_list = get_pairs(sectors)
 yearly_cor_a = calc_yearly_correlation(close_prices_df, pairs_list)
 
-numBins = int(np.sqrt(yearly_cor_a.shape[0])) * 4
-fix, ax = plt.subplots(figsize=(10, 8))
-ax.set_xlabel( 'Correlation between pairs' )
-ax.set_ylabel('Count')
-ax.grid(True)
-ax.hist(yearly_cor_a, bins=numBins, facecolor='b')
-ax.axvline(x=np.mean(yearly_cor_a), color='black')
-plt.show()
-
+display_histogram(yearly_cor_a, 'Correlation between pairs', 'Count')
 
 pass
