@@ -8,7 +8,9 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 from numpy import log
+from statsmodels.compat import scipy
 from tabulate import tabulate
+from scipy import stats
 
 s_and_p_file = 's_and_p_sector_components/sp_stocks.csv'
 s_and_p_data = 's_and_p_data'
@@ -250,8 +252,70 @@ def display_histogram(data_v: np.array, x_label: str, y_label: str) -> None:
 
 
 pairs_list = get_pairs(sectors)
-yearly_cor_a = calc_yearly_correlation(close_prices_df, pairs_list)
+# yearly_cor_a = calc_yearly_correlation(close_prices_df, pairs_list)
 
-display_histogram(yearly_cor_a, 'Correlation between pairs', 'Count')
+
+# display_histogram(yearly_cor_a, 'Correlation between pairs', 'Count')
+
+
+class PairsSelection:
+
+    def __init__(self, correlation_cutoff: float):
+        self.correlation_cutoff = correlation_cutoff
+
+    def pairs_yearly_correlation(self,
+                                 close_prices: pd.DataFrame,
+                                 start_ix: int,
+                                 end_ix: int,
+                                 pairs_list: List[Tuple],
+                                 cutoff: float) -> List[Tuple]:
+
+        """
+        Find the pairs with a log(price) correlation greater than or equal to cutoff
+        :param stock_close_df: the stock close prices for the entire backtest period
+        :param start_ix: the start index in stock_close_df
+        :param end_ix: the end index in stock_close_df
+        :param pairs_list: a list of pairs
+        :param cutoff: the cutoff for pairs selection
+        :return: A list of tuples consisting of tuple[stock_a, stock_b, sector, correlation]
+        """
+        selected_pairs_l = list()
+        for pair in pairs_list:
+            stock_a: str = pair[0]
+            stock_b: str = pair[1]
+            log_close_a = log(close_prices[stock_a][start_ix:end_ix+1])
+            log_close_b = log(close_prices[stock_b][start_ix:end_ix+1])
+            c = np.corrcoef(log_close_a, log_close_b)
+            cor_v = round(c[0, 1], 2)
+            if cor_v >= cutoff:
+                sector = pair[2]
+                selected_pairs_l.append((stock_a, stock_b, sector, cor_v))
+        return selected_pairs_l
+
+    def regression(self, close_prices: pd.DataFrame, start_ix: int, end_ix: int, pair: Tuple):
+        def predict(intercept: float, slope: float, X: pd.Series) -> pd.Series:
+            y_hat = intercept + (slope * X)
+            return y_hat
+
+        # https://www.reneshbedre.com/blog/learn-to-calculate-residuals-regression.html
+        stock_a: str = pair[0]
+        stock_b: str = pair[1]
+        log_close_a = log(close_prices[stock_a][start_ix:end_ix])
+        log_close_b = log(close_prices[stock_b][start_ix:end_ix])
+        slope, intercept, r_value, p_value, std_err = stats.linregress(log_close_a, log_close_b)
+        close_b_hat = predict(intercept=intercept, slope=slope, X=log_close_a)
+        res = log_close_b - close_b_hat
+        pass
+
+
+
+
+
+
+correlation_cutoff = 0.75
+pairs_selection = PairsSelection(correlation_cutoff)
+
+test_pair = ('WAT', 'XRAY', 'health-care', 0.9)
+pairs_selection.regression(close_prices=close_prices_df, start_ix=0, end_ix=trading_days, pair=test_pair)
 
 pass
