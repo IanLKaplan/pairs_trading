@@ -172,6 +172,20 @@ print(tabulate(pairs_info_df, headers=[*pairs_info_df.columns], tablefmt='fancy_
 
 
 def get_pairs(sector_info: dict) -> List[Tuple]:
+    """
+    Return all of the stock pairs, where the pairs are selected from the S&P 500 sector.
+
+    :param sector_info: A dictionary containing the sector info. For example:
+                        energies': ['APA', 'BKR', 'COP', ...]
+                       Here 'energies' is the dictionary key for the list of S&P 500 stocks in that sector.
+    :return: A list of Tuples, where each tuple contains the symbols for the stock pair and the sector.
+            For example:
+              [('AAPL', 'ACN', 'information-technology'),
+               ('AAPL', 'ADBE', 'information-technology'),
+               ('AAPL', 'ADI', 'information-technology'),
+               ('AAPL', 'ADP', 'information-technology'),
+               ('AAPL', 'ADSK', 'information-technology')]
+    """
     pairs_list = list()
     sectors = list(sector_info.keys())
     for sector in sectors:
@@ -208,10 +222,6 @@ def calc_yearly_correlation(stock_close_df: pd.DataFrame, pairs_list: List[Tuple
         cor_v: np.array = calc_pairs_correlation(stock_close_df, pair, trading_days, all_cor_v)
         all_cor_v = np.append(all_cor_v, cor_v)
     return all_cor_v
-
-
-def parallel_yearly_correlation(stock_close_df: pd.DataFrame, pairs_list: List[Tuple]) -> np.array:
-    pass
 
 
 def display_histogram(data_v: np.array, x_label: str, y_label: str) -> None:
