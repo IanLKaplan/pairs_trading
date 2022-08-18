@@ -199,7 +199,14 @@ def get_pairs(sector_info: dict) -> List[Tuple]:
     return pairs_list
 
 
-def calc_pairs_correlation(stock_close_df: pd.DataFrame, pair: Tuple, window: int, all_cor_v: np.array) -> np.array:
+def calc_pairs_correlation(stock_close_df: pd.DataFrame, pair: Tuple, window: int) -> np.array:
+    """
+    Calculate the windowed correlations for a stock pair over the entire data set.
+    :param stock_close_df: A data frame containing the stock close prices
+    :param pair: the stock pair
+    :param window: The data window
+    :return: a numpy array of windowed correlations for the pair over the entire time period.
+    """
     cor_v = np.zeros(0)
     stock_a = pair[0]
     stock_b = pair[1]
@@ -207,6 +214,7 @@ def calc_pairs_correlation(stock_close_df: pd.DataFrame, pair: Tuple, window: in
     b_close = stock_close_df[stock_b]
     a_log_close = log(a_close)
     b_log_close = log(b_close)
+
     assert len(a_log_close) == len(b_log_close)
     for i in range(0, len(a_log_close), window):
         sec_a = a_log_close[i:i + window]
@@ -217,9 +225,15 @@ def calc_pairs_correlation(stock_close_df: pd.DataFrame, pair: Tuple, window: in
 
 
 def calc_yearly_correlation(stock_close_df: pd.DataFrame, pairs_list: List[Tuple]) -> np.array:
+    """
+    Calculate the yearly pairs correlation over the entire time period
+    :param stock_close_df: A data frame containing the stock close prices. The columns are the stock tickers.
+    :param pairs_list: A list of the pairs formed from the S&P 500 sectors.
+    :return: A numpy array with the correlcations.
+    """
     all_cor_v = np.zeros(0)
     for pair in pairs_list:
-        cor_v: np.array = calc_pairs_correlation(stock_close_df, pair, trading_days, all_cor_v)
+        cor_v: np.array = calc_pairs_correlation(stock_close_df, pair, trading_days)
         all_cor_v = np.append(all_cor_v, cor_v)
     return all_cor_v
 
