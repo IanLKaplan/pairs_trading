@@ -8,6 +8,7 @@ import pandas as pd
 import yfinance as yf
 from numpy import log
 from tabulate import tabulate
+import matplotlib.pyplot as plt
 
 
 s_and_p_file = 's_and_p_sector_components/sp_stocks.csv'
@@ -183,7 +184,7 @@ def get_pairs(sector_info: dict) -> List[Tuple]:
     return pairs_list
 
 
-def calc_pairs_correlation(stock_close_df: pd.DataFrame, pair: Tuple, window: int) -> pd.DataFrame:
+def calc_pairs_correlation(stock_close_df: pd.DataFrame, pair: Tuple, window: int) -> np.array:
     cor_v = np.zeros(0)
     stock_a = pair[0]
     stock_b = pair[1]
@@ -196,7 +197,7 @@ def calc_pairs_correlation(stock_close_df: pd.DataFrame, pair: Tuple, window: in
         sec_a = a_log_close[i:i + window]
         sec_b = b_log_close[i:i+window]
         c = np.corrcoef(sec_a, sec_b)
-        cor_v = np.append(cor_v, c[0,1])
+        cor_v = np.append(cor_v, c[0, 1])
     return cor_v
 
 
@@ -212,6 +213,14 @@ pairs_list = get_pairs(sectors)
 
 yearly_cor_a = calc_yearly_correlation(close_prices_df, pairs_list)
 
+numBins = int(np.sqrt(yearly_cor_a.shape[0])) * 4
+fix, ax = plt.subplots(figsize=(10, 8))
+ax.set_xlabel( 'Correlation between pairs' )
+ax.set_ylabel('Count')
+ax.grid(True)
+ax.hist(yearly_cor_a, bins=numBins, facecolor='b')
+ax.axvline(x=np.mean(yearly_cor_a), color='black')
+plt.show()
 
 
 pass
