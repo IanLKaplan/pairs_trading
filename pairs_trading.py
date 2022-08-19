@@ -251,6 +251,14 @@ def display_histogram(data_v: np.array, x_label: str, y_label: str) -> None:
     plt.show()
 
 
+def plot_ts(data_v: pd.Series) -> None:
+    fix, ax = plt.subplots(figsize=(10, 8))
+    ax.grid(True)
+    data_v.plot()
+    ax.axhline(y=0, color='black')
+    plt.show()
+
+
 pairs_list = get_pairs(sectors)
 
 
@@ -381,5 +389,10 @@ class PairsSelection:
 correlation_cutoff = 0.75
 pairs_selection = PairsSelection(close_prices=close_prices_df, correlation_cutoff=correlation_cutoff)
 stats_l = pairs_selection.select_pairs(start_ix=0, end_ix=trading_days, pairs_list=pairs_list, threshold='1%')
+
+print(f'Num ber of candidate pairs: {len(pairs_list)}, number of pairs after selection: {len(stats_l)}: {round((len(stats_l)/len(pairs_list)) * 100,2)} percent')
+
+res = stats_l[0].residuals
+plot_ts(res)
 
 pass
