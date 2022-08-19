@@ -6,13 +6,11 @@ from typing import List, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import statsmodels.api as sm
 import yfinance as yf
 from numpy import log
-from statsmodels.compat import scipy
-from tabulate import tabulate
-from scipy import stats
-import statsmodels.api as sm
 from statsmodels.tsa.stattools import adfuller
+from tabulate import tabulate
 
 s_and_p_file = 's_and_p_sector_components/sp_stocks.csv'
 s_and_p_data = 's_and_p_data'
@@ -270,8 +268,7 @@ class PairStats:
                  residuals: pd.Series,
                  adf_stat: float,
                  p_value: float,
-                 one_percent: float,
-                 five_percent: float):
+                 critical_vals: dict):
         self.stock_a = stock_a
         self.stock_b = stock_b
         self.slope = slope
@@ -279,11 +276,13 @@ class PairStats:
         self.residuals = residuals
         self.adf_stat = adf_stat
         self.p_value = p_value
-        self.one_percent = one_percent
-        self.five_percent = five_percent
+        self.critical_vals = critical_vals
 
     def __str__(self):
-        s: str = f'({self.stock_a},{self.stock_b}) slope: {self.slope} intercept: {self.intercept} \nadf: {self.adf_stat} p-value: {self.p_value} 5%: {self.five_percent} 1%: {self.one_percent}'
+        s1: str = f'({self.stock_a},{self.stock_b}) slope: {self.slope} intercept: {self.intercept}'
+        s2: str = f'adf: {self.adf_stat} p-value: {self.p_value}'
+        s3: str = f'1%: {self.critical_vals["1%"]}, 5%: {self.critical_vals["5%"]}, 10%: {self.critical_vals["10%"]}'
+        s = s1 + '\n' + s2 + '\n' + s3
         return s
 
 
@@ -304,19 +303,17 @@ class PairsSelection:
         """
         Find the pairs with a log(price) correlation greater than or equal to cutoff within a close price window
         from start_ix to end_ix
-        :param stock_close_df: the stock close prices for the entire backtest period
         :param start_ix: the start index in stock_close_df
         :param end_ix: the end index in stock_close_df
         :param pairs_list: a list of pairs
-        :param cutoff: the cutoff for pairs selection
         :return: A list of tuples consisting of tuple[stock_a, stock_b, sector, correlation]
         """
         selected_pairs_l = list()
         for pair in pairs_list:
             stock_a: str = pair[0]
             stock_b: str = pair[1]
-            log_close_a = log(close_prices[stock_a][start_ix:end_ix + 1])
-            log_close_b = log(close_prices[stock_b][start_ix:end_ix + 1])
+            log_close_a = log(self.close_prices[stock_a][start_ix:end_ix + 1])
+            log_close_b = log(self.close_prices[stock_b][start_ix:end_ix + 1])
             c = np.corrcoef(log_close_a, log_close_b)
             cor_v = round(c[0, 1], 2)
             if cor_v >= self.correlation_cutoff:
@@ -327,8 +324,8 @@ class PairsSelection:
     def stationary_analysis(self, start_ix: int, end_ix: int, pair: Tuple) -> PairStats:
         stock_a: str = pair[0]
         stock_b: str = pair[1]
-        log_close_a = log(close_prices[stock_a][start_ix:end_ix])
-        log_close_b = log(close_prices[stock_b][start_ix:end_ix])
+        log_close_a = log(self.close_prices[stock_a][start_ix:end_ix])
+        log_close_b = log(self.close_prices[stock_b][start_ix:end_ix])
         log_close_b_const = sm.add_constant(log_close_b)
         result_ab = sm.OLS(log_close_a, log_close_b_const).fit()
         log_close_a_const = sm.add_constant(log_close_a)
@@ -351,9 +348,7 @@ class PairsSelection:
         adf_result = adfuller(residuals)
         adf_stat = round(adf_result[0], self.decimals)
         p_value = round(adf_result[1], self.decimals)
-        d = adf_result[4]
-        one_percent = round(d['1%'], self.decimals)
-        five_percent = round(d['5%'], self.decimals)
+        critical_vals = adf_result[4]
         pair_stats = PairStats(stock_a=stock_a,
                                stock_b=stock_b,
                                slope=slope,
@@ -361,21 +356,30 @@ class PairsSelection:
                                residuals=residuals,
                                adf_stat=adf_stat,
                                p_value=p_value,
-                               one_percent=one_percent,
-                               five_percent=five_percent)
+                               critical_vals=critical_vals)
         return pair_stats
 
-    def find_pairs(self, start_ix: int, end_ix: int, pairs_list=pairs_list ) -> List[PairStats]:
-        selected_pairs = self.pairs_correlation(close_prices=close_prices, start_ix=start_ix, end_ix=end_ix, pairs_list=pairs_list)
+    def select_pairs(self, start_ix: int, end_ix: int, pairs_list: List[Tuple], threshold: str) -> List[PairStats]:
+        """
+
+        :param start_ix: start index in close price DataFrame
+        :param end_ix:  end index in close price DataFrame
+        :param pairs_list: a list of tuples (stock_a, stock_b, sector)
+        :param threshold: a string equal to '1%', '5%' or '10%'
+        :return: pairs that are correlated and have regression residuals that show mean reversion to the threshold level
+        """
+        selected_pairs = self.pairs_correlation(start_ix=start_ix, end_ix=end_ix, pairs_list=pairs_list)
         pair_stat_l: List[PairStats] = list()
         for pair in selected_pairs:
-            stats = self.stationary_analysis(close_prices=close_prices, start_ix=start_ix, end_ix=end_ix, pair=pair)
-            pair_stat_l.append(stats)
+            stats_ = self.stationary_analysis(start_ix=start_ix, end_ix=end_ix, pair=pair)
+            threshold_level = stats_.critical_vals[threshold]
+            if stats_.adf_stat < threshold_level:
+                pair_stat_l.append(stats_)
         return pair_stat_l
 
 
 correlation_cutoff = 0.75
 pairs_selection = PairsSelection(close_prices=close_prices_df, correlation_cutoff=correlation_cutoff)
-stats_l = pairs_selection.find_pairs(cstart_ix=0, end_ix=trading_days, pairs_list=pairs_list)
+stats_l = pairs_selection.select_pairs(start_ix=0, end_ix=trading_days, pairs_list=pairs_list, threshold='1%')
 
 pass
