@@ -11,6 +11,8 @@ from numpy import log
 from statsmodels.compat import scipy
 from tabulate import tabulate
 from scipy import stats
+import statsmodels.api as sm
+from statsmodels.tsa.stattools import adfuller
 
 s_and_p_file = 's_and_p_sector_components/sp_stocks.csv'
 s_and_p_data = 's_and_p_data'
@@ -252,26 +254,56 @@ def display_histogram(data_v: np.array, x_label: str, y_label: str) -> None:
 
 
 pairs_list = get_pairs(sectors)
+
+
 # yearly_cor_a = calc_yearly_correlation(close_prices_df, pairs_list)
 
 
 # display_histogram(yearly_cor_a, 'Correlation between pairs', 'Count')
 
+class PairStats:
+
+    def __init__(self, stock_a: str,
+                 stock_b: str,
+                 slope: float,
+                 intercept: float,
+                 residuals: pd.Series,
+                 adf_stat: float,
+                 p_value: float,
+                 one_percent: float,
+                 five_percent: float):
+        self.stock_a = stock_a
+        self.stock_b = stock_b
+        self.slope = slope
+        self.intercept = intercept
+        self.residuals = residuals
+        self.adf_stat = adf_stat
+        self.p_value = p_value
+        self.one_percent = one_percent
+        self.five_percent = five_percent
+
+    def __str__(self):
+        s: str = f'({self.stock_a},{self.stock_b}) slope: {self.slope} intercept: {self.intercept} \nadf: {self.adf_stat} p-value: {self.p_value} 5%: {self.five_percent} 1%: {self.one_percent}'
+        return s
+
 
 class PairsSelection:
+    decimals = 4
 
-    def __init__(self, correlation_cutoff: float):
+    def __init__(self,
+                 close_prices: pd.DataFrame,
+                 correlation_cutoff: float):
         self.correlation_cutoff = correlation_cutoff
+        self.close_prices = close_prices
 
-    def pairs_yearly_correlation(self,
-                                 close_prices: pd.DataFrame,
-                                 start_ix: int,
-                                 end_ix: int,
-                                 pairs_list: List[Tuple],
-                                 cutoff: float) -> List[Tuple]:
+    def pairs_correlation(self,
+                          start_ix: int,
+                          end_ix: int,
+                          pairs_list: List[Tuple]) -> List[Tuple]:
 
         """
-        Find the pairs with a log(price) correlation greater than or equal to cutoff
+        Find the pairs with a log(price) correlation greater than or equal to cutoff within a close price window
+        from start_ix to end_ix
         :param stock_close_df: the stock close prices for the entire backtest period
         :param start_ix: the start index in stock_close_df
         :param end_ix: the end index in stock_close_df
@@ -283,39 +315,67 @@ class PairsSelection:
         for pair in pairs_list:
             stock_a: str = pair[0]
             stock_b: str = pair[1]
-            log_close_a = log(close_prices[stock_a][start_ix:end_ix+1])
-            log_close_b = log(close_prices[stock_b][start_ix:end_ix+1])
+            log_close_a = log(close_prices[stock_a][start_ix:end_ix + 1])
+            log_close_b = log(close_prices[stock_b][start_ix:end_ix + 1])
             c = np.corrcoef(log_close_a, log_close_b)
             cor_v = round(c[0, 1], 2)
-            if cor_v >= cutoff:
+            if cor_v >= self.correlation_cutoff:
                 sector = pair[2]
                 selected_pairs_l.append((stock_a, stock_b, sector, cor_v))
         return selected_pairs_l
 
-    def regression(self, close_prices: pd.DataFrame, start_ix: int, end_ix: int, pair: Tuple):
-        def predict(intercept: float, slope: float, X: pd.Series) -> pd.Series:
-            y_hat = intercept + (slope * X)
-            return y_hat
-
-        # https://www.reneshbedre.com/blog/learn-to-calculate-residuals-regression.html
+    def stationary_analysis(self, start_ix: int, end_ix: int, pair: Tuple) -> PairStats:
         stock_a: str = pair[0]
         stock_b: str = pair[1]
         log_close_a = log(close_prices[stock_a][start_ix:end_ix])
         log_close_b = log(close_prices[stock_b][start_ix:end_ix])
-        slope, intercept, r_value, p_value, std_err = stats.linregress(log_close_a, log_close_b)
-        close_b_hat = predict(intercept=intercept, slope=slope, X=log_close_a)
-        res = log_close_b - close_b_hat
-        pass
+        log_close_b_const = sm.add_constant(log_close_b)
+        result_ab = sm.OLS(log_close_a, log_close_b_const).fit()
+        log_close_a_const = sm.add_constant(log_close_a)
+        result_ba = sm.OLS(log_close_b, log_close_a_const).fit()
+        slope_ab = result_ab.params[stock_b]
+        slope_ba = result_ba.params[stock_a]
+        result = result_ab
+        slope = slope_ab
+        if slope_ab < slope_ba:
+            result = result_ba
+            slope = slope_ba
+        intercept = round(result.params['const'], self.decimals)
+        slope = round(slope, self.decimals)
+        residuals = result.resid
+        # References
+        # https://machinelearningmastery.com/time-series-data-stationary-python/
+        # https://www.quantstart.com/articles/Basics-of-Statistical-Mean-Reversion-Testing-Part-II/
+        # p-value <= 0.05 stationary mean reverting TS
+        # ADF more negative means a stronger mean reverting process
+        adf_result = adfuller(residuals)
+        adf_stat = round(adf_result[0], self.decimals)
+        p_value = round(adf_result[1], self.decimals)
+        d = adf_result[4]
+        one_percent = round(d['1%'], self.decimals)
+        five_percent = round(d['5%'], self.decimals)
+        pair_stats = PairStats(stock_a=stock_a,
+                               stock_b=stock_b,
+                               slope=slope,
+                               intercept=intercept,
+                               residuals=residuals,
+                               adf_stat=adf_stat,
+                               p_value=p_value,
+                               one_percent=one_percent,
+                               five_percent=five_percent)
+        return pair_stats
 
-
-
-
+    def find_pairs(self, start_ix: int, end_ix: int, pairs_list=pairs_list ) -> List[PairStats]:
+        selected_pairs = self.pairs_correlation(close_prices=close_prices, start_ix=start_ix, end_ix=end_ix, pairs_list=pairs_list)
+        pair_stat_l: List[PairStats] = list()
+        for pair in selected_pairs:
+            stats = self.stationary_analysis(close_prices=close_prices, start_ix=start_ix, end_ix=end_ix, pair=pair)
+            pair_stat_l.append(stats)
+        return pair_stat_l
 
 
 correlation_cutoff = 0.75
-pairs_selection = PairsSelection(correlation_cutoff)
-
-test_pair = ('WAT', 'XRAY', 'health-care', 0.9)
-pairs_selection.regression(close_prices=close_prices_df, start_ix=0, end_ix=trading_days, pair=test_pair)
+pairs_selection = PairsSelection(close_prices=close_prices_df, correlation_cutoff=correlation_cutoff)
+stats_l = pairs_selection.find_pairs(cstart_ix=0, end_ix=trading_days, pairs_list=pairs_list)
 
 pass
