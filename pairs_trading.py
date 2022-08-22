@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 from datetime import timedelta
-from typing import List, Tuple
+from typing import List, Tuple, Set
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -209,6 +209,7 @@ def calc_pairs_correlation(stock_close_df: pd.DataFrame, pair: Tuple, window: in
     :param window: The data window
     :return: a numpy array of windowed correlations for the pair over the entire time period.
     """
+    window = int(window)
     cor_v = np.zeros(0)
     stock_a = pair[0]
     stock_b = pair[1]
@@ -226,16 +227,17 @@ def calc_pairs_correlation(stock_close_df: pd.DataFrame, pair: Tuple, window: in
     return cor_v
 
 
-def calc_yearly_correlation(stock_close_df: pd.DataFrame, pairs_list: List[Tuple]) -> np.array:
+def calc_windowed_correlation(stock_close_df: pd.DataFrame, pairs_list: List[Tuple], window: int) -> np.array:
     """
     Calculate the yearly pairs correlation over the entire time period
     :param stock_close_df: A data frame containing the stock close prices. The columns are the stock tickers.
     :param pairs_list: A list of the pairs formed from the S&P 500 sectors.
     :return: A numpy array with the correlcations.
     """
+    window = int(window)
     all_cor_v = np.zeros(0)
     for pair in pairs_list:
-        cor_v: np.array = calc_pairs_correlation(stock_close_df, pair, trading_days)
+        cor_v: np.array = calc_pairs_correlation(stock_close_df, pair, window)
         all_cor_v = np.append(all_cor_v, cor_v)
     return all_cor_v
 
@@ -262,15 +264,17 @@ def plot_ts(data_v: pd.Series) -> None:
 pairs_list = get_pairs(sectors)
 
 
-# yearly_cor_a = calc_yearly_correlation(close_prices_df, pairs_list)
+yearly_cor_a = calc_windowed_correlation(close_prices_df, pairs_list, trading_days/2)
 
 
-# display_histogram(yearly_cor_a, 'Correlation between pairs', 'Count')
+display_histogram(yearly_cor_a, 'Correlation between pairs', 'Count')
 
 class PairStats:
 
-    def __init__(self, stock_a: str,
+    def __init__(self,
+                 stock_a: str,
                  stock_b: str,
+                 cor_v: float,
                  slope: float,
                  intercept: float,
                  residuals: pd.Series,
@@ -279,6 +283,7 @@ class PairStats:
                  critical_vals: dict):
         self.stock_a = stock_a
         self.stock_b = stock_b
+        self.cor_v = cor_v
         self.slope = slope
         self.intercept = intercept
         self.residuals = residuals
@@ -287,7 +292,7 @@ class PairStats:
         self.critical_vals = critical_vals
 
     def __str__(self):
-        s1: str = f'({self.stock_a},{self.stock_b}) slope: {self.slope} intercept: {self.intercept}'
+        s1: str = f'({self.stock_a},{self.stock_b}) cor_v: {self.cor_v} slope: {self.slope} intercept: {self.intercept}'
         s2: str = f'adf: {self.adf_stat} p-value: {self.p_value}'
         s3: str = f'1%: {self.critical_vals["1%"]}, 5%: {self.critical_vals["5%"]}, 10%: {self.critical_vals["10%"]}'
         s = s1 + '\n' + s2 + '\n' + s3
@@ -332,6 +337,7 @@ class PairsSelection:
     def stationary_analysis(self, start_ix: int, end_ix: int, pair: Tuple) -> PairStats:
         stock_a: str = pair[0]
         stock_b: str = pair[1]
+        cor_v: float = pair[3]
         log_close_a = log(self.close_prices[stock_a][start_ix:end_ix])
         log_close_b = log(self.close_prices[stock_b][start_ix:end_ix])
         log_close_b_const = sm.add_constant(log_close_b)
@@ -359,6 +365,7 @@ class PairsSelection:
         critical_vals = adf_result[4]
         pair_stats = PairStats(stock_a=stock_a,
                                stock_b=stock_b,
+                               cor_v=cor_v,
                                slope=slope,
                                intercept=intercept,
                                residuals=residuals,
@@ -375,24 +382,38 @@ class PairsSelection:
         :param pairs_list: a list of tuples (stock_a, stock_b, sector)
         :param threshold: a string equal to '1%', '5%' or '10%'
         :return: pairs that are correlated and have regression residuals that show mean reversion to the threshold level
+                 Only unique pairs of stocks are returned. If there are two canidate pairs that both have AAPL, for example,
+                 only one pair will be returned so that a stock does not appear twice in the set of pairs.
         """
         selected_pairs = self.pairs_correlation(start_ix=start_ix, end_ix=end_ix, pairs_list=pairs_list)
+
+        stock_set: Set = set()
         pair_stat_l: List[PairStats] = list()
         for pair in selected_pairs:
             stats_ = self.stationary_analysis(start_ix=start_ix, end_ix=end_ix, pair=pair)
             threshold_level = stats_.critical_vals[threshold]
             if stats_.adf_stat < threshold_level:
-                pair_stat_l.append(stats_)
+                stock_a: str = pair[0]
+                stock_b: str = pair[1]
+                if stock_a not in stock_set and stock_b not in stock_set:
+                    stock_set.add(stock_a)
+                    stock_set.add(stock_b)
+                    pair_stat_l.append(stats_)
         return pair_stat_l
 
 
 correlation_cutoff = 0.75
 pairs_selection = PairsSelection(close_prices=close_prices_df, correlation_cutoff=correlation_cutoff)
-stats_l = pairs_selection.select_pairs(start_ix=0, end_ix=trading_days, pairs_list=pairs_list, threshold='1%')
+stats_l = pairs_selection.select_pairs(start_ix=0, end_ix=trading_days/2, pairs_list=pairs_list, threshold='1%')
 
-print(f'Num ber of candidate pairs: {len(pairs_list)}, number of pairs after selection: {len(stats_l)}: {round((len(stats_l)/len(pairs_list)) * 100,2)} percent')
+print(f'Number of candidate pairs: {len(pairs_list)}, number of pairs after selection: {len(stats_l)}: {round((len(stats_l)/len(pairs_list)) * 100,2)} percent')
+
+cor_l = [stat.cor_v for stat in stats_l]
+cor_a = np.array(cor_l)
+display_histogram(cor_a, 'Pairs Correlation', 'Count')
 
 res = stats_l[0].residuals
 plot_ts(res)
 
 pass
+
