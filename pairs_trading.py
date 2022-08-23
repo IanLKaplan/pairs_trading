@@ -284,7 +284,9 @@ display_histogram(cor_a, 'Correlation between pairs', 'Count')
 
 
 class PairStats:
-
+    """
+    A container for information about a pair
+    """
     def __init__(self,
                  stock_a: str,
                  stock_b: str,
