@@ -173,7 +173,7 @@ class MarketData:
 
 
 stock_info_df = read_s_and_p_stock_info(s_and_p_file)
-market_data = MarketData(start_date=start_date, path=s_and_p_data, update_data=False)
+market_data = MarketData(start_date=start_date, path=s_and_p_data, update_data=True)
 stock_l: list = list(set(stock_info_df['Symbol']))
 stock_l.sort()
 close_prices_df = market_data.get_close_data(stock_l)
