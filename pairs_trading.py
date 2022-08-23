@@ -29,7 +29,12 @@ def convert_date(some_date):
     return some_date
 
 
-def read_stock_data(path: str) -> pd.DataFrame:
+def read_s_and_p_stock_info(path: str) -> pd.DataFrame:
+    """
+    Read a file containing the information on S&P 500 stocks (e.g., the symbol, company name and sector)
+    :param path: the path to the file
+    :return: a DataFrame with columns Symbol, Name and Sector
+    """
     s_and_p_stocks = pd.DataFrame()
     if os.access(path, os.R_OK):
         # s_and_p_socks columns are Symbol, Name and Sector
@@ -45,7 +50,7 @@ def extract_sectors(stocks_df: pd.DataFrame) -> dict:
     """
     Columns in the DataFrame are Symbol,Name,Sector
     :param stocks_df:
-    :return:
+    :return: a dictionary where the key is the sector and the value is a list of stock symbols in that sector.
     """
     sector: str = ''
     sector_l: list = list()
@@ -62,6 +67,14 @@ def extract_sectors(stocks_df: pd.DataFrame) -> dict:
 
 
 def calc_pair_counts(sector_info: dict) -> pd.DataFrame:
+    """
+    Return a DataFrame
+    :param sector_info: a dictionary where the key is the sector name and the
+                        value is a list of stock symbols for that sector
+    :return: a DataFrame where the index is the sector names and the columns are "num stocks" and "num pairs"
+             "num stocks" is the number of stocks in the sector. "num pairs" is the number of unique pairs
+             that can be formed from the set of sector stocks.  The last row is the sum of the columns.
+    """
     column_label = ['num stocks', 'num pairs']
     sectors = list(sector_info.keys())
     counts_l: list = list()
@@ -91,10 +104,11 @@ class MarketData:
     This class supports retrieving and storing stock market close data from Yahoo.
     """
 
-    def __init__(self, start_date: datetime, path: str):
+    def __init__(self, start_date: datetime, path: str, update_data: bool = True):
         self.start_date = start_date
         self.path = path
         self.end_date: datetime = datetime.today() - timedelta(days=1)
+        self.update_data = update_data
 
     def get_market_data(self,
                         symbol: str,
@@ -122,17 +136,18 @@ class MarketData:
         file_path = self.symbol_file_path(symbol)
         if os.access(file_path, os.R_OK):
             symbol_df = pd.read_csv(file_path, index_col='Date')
-            last_row = symbol_df.tail(1)
-            last_date = convert_date(last_row.index[0])
-            if last_date.date() < self.end_date.date():
-                sym_start_date = last_date + timedelta(days=1)
-                new_data_df = self.get_market_data(symbol, sym_start_date, datetime.today())
-                if new_data_df.shape[0] > 0:
-                    symbol_df = pd.concat([symbol_df, new_data_df], axis=0)
-                    ix = symbol_df.index
-                    ix = pd.to_datetime(ix)
-                    symbol_df.index = ix
-                    symbol_df.to_csv(file_path)
+            if self.update_data:
+                last_row = symbol_df.tail(1)
+                last_date = convert_date(last_row.index[0])
+                if last_date.date() < self.end_date.date():
+                    sym_start_date = last_date + timedelta(days=1)
+                    new_data_df = self.get_market_data(symbol, sym_start_date, datetime.today())
+                    if new_data_df.shape[0] > 0:
+                        symbol_df = pd.concat([symbol_df, new_data_df], axis=0)
+                        ix = symbol_df.index
+                        ix = pd.to_datetime(ix)
+                        symbol_df.index = ix
+                        symbol_df.to_csv(file_path)
         else:
             symbol_df = self.get_market_data(symbol, self.start_date, self.end_date)
             if symbol_df.shape[0] > 0:
@@ -157,11 +172,10 @@ class MarketData:
         return close_df
 
 
-stock_info_df = read_stock_data(s_and_p_file)
-market_data = MarketData(start_date, s_and_p_data)
+stock_info_df = read_s_and_p_stock_info(s_and_p_file)
+market_data = MarketData(start_date=start_date, path=s_and_p_data, update_data=False)
 stock_l: list = list(set(stock_info_df['Symbol']))
 stock_l.sort()
-# t = market_data.parallel_close_data(stock_l)
 close_prices_df = market_data.get_close_data(stock_l)
 final_stock_list = list(close_prices_df.columns)
 mask = stock_info_df['Symbol'].isin(final_stock_list)
@@ -175,7 +189,7 @@ print(tabulate(pairs_info_df, headers=[*pairs_info_df.columns], tablefmt='fancy_
 
 def get_pairs(sector_info: dict) -> List[Tuple]:
     """
-    Return all of the stock pairs, where the pairs are selected from the S&P 500 sector.
+    Return all the stock pairs, where the pairs are selected from the S&P 500 sector.
 
     :param sector_info: A dictionary containing the sector info. For example:
                         energies': ['APA', 'BKR', 'COP', ...]
@@ -201,7 +215,7 @@ def get_pairs(sector_info: dict) -> List[Tuple]:
     return pairs_list
 
 
-def calc_pairs_correlation(stock_close_df: pd.DataFrame, pair: Tuple, window: int) -> np.array:
+def calc_pair_correlation(stock_close_df: pd.DataFrame, pair: Tuple, window: int) -> np.array:
     """
     Calculate the windowed correlations for a stock pair over the entire data set.
     :param stock_close_df: A data frame containing the stock close prices
@@ -229,7 +243,8 @@ def calc_pairs_correlation(stock_close_df: pd.DataFrame, pair: Tuple, window: in
 
 def calc_windowed_correlation(stock_close_df: pd.DataFrame, pairs_list: List[Tuple], window: int) -> np.array:
     """
-    Calculate the yearly pairs correlation over the entire time period
+    Calculate the windowed pair correlation over the entire time period, for all the pairs.
+
     :param stock_close_df: A data frame containing the stock close prices. The columns are the stock tickers.
     :param pairs_list: A list of the pairs formed from the S&P 500 sectors.
     :return: A numpy array with the correlcations.
@@ -237,7 +252,7 @@ def calc_windowed_correlation(stock_close_df: pd.DataFrame, pairs_list: List[Tup
     window = int(window)
     all_cor_v = np.zeros(0)
     for pair in pairs_list:
-        cor_v: np.array = calc_pairs_correlation(stock_close_df, pair, window)
+        cor_v: np.array = calc_pair_correlation(stock_close_df, pair, window)
         all_cor_v = np.append(all_cor_v, cor_v)
     return all_cor_v
 
@@ -263,11 +278,10 @@ def plot_ts(data_v: pd.Series) -> None:
 
 pairs_list = get_pairs(sectors)
 
+cor_a = calc_windowed_correlation(close_prices_df, pairs_list, int(trading_days / 2))
 
-yearly_cor_a = calc_windowed_correlation(close_prices_df, pairs_list, trading_days/2)
+display_histogram(cor_a, 'Correlation between pairs', 'Count')
 
-
-display_histogram(yearly_cor_a, 'Correlation between pairs', 'Count')
 
 class PairStats:
 
@@ -359,7 +373,7 @@ class PairsSelection:
         # https://www.quantstart.com/articles/Basics-of-Statistical-Mean-Reversion-Testing-Part-II/
         # p-value <= 0.05 stationary mean reverting TS
         # ADF more negative means a stronger mean reverting process
-        adf_result = adfuller(residuals)
+        adf_result: Tuple = adfuller(residuals)
         adf_stat = round(adf_result[0], self.decimals)
         p_value = round(adf_result[1], self.decimals)
         critical_vals = adf_result[4]
@@ -404,9 +418,10 @@ class PairsSelection:
 
 correlation_cutoff = 0.75
 pairs_selection = PairsSelection(close_prices=close_prices_df, correlation_cutoff=correlation_cutoff)
-stats_l = pairs_selection.select_pairs(start_ix=0, end_ix=trading_days/2, pairs_list=pairs_list, threshold='1%')
+stats_l = pairs_selection.select_pairs(start_ix=0, end_ix=int(trading_days / 2), pairs_list=pairs_list, threshold='1%')
 
-print(f'Number of candidate pairs: {len(pairs_list)}, number of pairs after selection: {len(stats_l)}: {round((len(stats_l)/len(pairs_list)) * 100,2)} percent')
+print(
+    f'Number of candidate pairs: {len(pairs_list)}, number of pairs after selection: {len(stats_l)}: {round((len(stats_l) / len(pairs_list)) * 100, 2)} percent')
 
 cor_l = [stat.cor_v for stat in stats_l]
 cor_a = np.array(cor_l)
@@ -416,4 +431,3 @@ res = stats_l[0].residuals
 plot_ts(res)
 
 pass
-
