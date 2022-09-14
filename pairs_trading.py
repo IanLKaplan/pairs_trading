@@ -189,11 +189,13 @@ print(tabulate(pairs_info_df, headers=[*pairs_info_df.columns], tablefmt='fancy_
 
 def get_pairs(sector_info: dict) -> List[Tuple]:
     """
-    Return all the stock pairs, where the pairs are selected from the S&P 500 sector.
+    Return the sector stock pairs, where the pairs are selected from the S&P 500 sector.
 
     :param sector_info: A dictionary containing the sector info. For example:
                         energies': ['APA', 'BKR', 'COP', ...]
-                       Here 'energies' is the dictionary key for the list of S&P 500 stocks in that sector.
+                       Here 'energies' is the dictionary key for the S&P 500 sector. The dictionary value is the
+                       list of stocks in the sector.
+
     :return: A list of Tuples, where each tuple contains the symbols for the stock pair and the sector.
             For example:
               [('AAPL', 'ACN', 'information-technology'),
@@ -422,8 +424,7 @@ correlation_cutoff = 0.75
 pairs_selection = PairsSelection(close_prices=close_prices_df, correlation_cutoff=correlation_cutoff)
 stats_l = pairs_selection.select_pairs(start_ix=0, end_ix=int(trading_days / 2), pairs_list=pairs_list, threshold='1%')
 
-print(
-    f'Number of candidate pairs: {len(pairs_list)}, number of pairs after selection: {len(stats_l)}: {round((len(stats_l) / len(pairs_list)) * 100, 2)} percent')
+print(f'Number of candidate pairs: {len(pairs_list)}, number of pairs after selection: {len(stats_l)}: {round((len(stats_l) / len(pairs_list)) * 100, 2)} percent')
 
 cor_l = [stat.cor_v for stat in stats_l]
 cor_a = np.array(cor_l)
