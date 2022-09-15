@@ -456,4 +456,12 @@ def compute_halflife(prices: pd.Series, lookback_window: int) -> float:
 
 halflife = compute_halflife(prices=close_prices_df['AAPL'], lookback_window=lookback_window)
 
+# https://onriskandreturn.com/2019/10/28/pairs-trade-practice/
+# A Bollinger band is formed with three lines.  The middle line is a moving average of a time series, which
+# would be replaced with the price spread obtained by subtracting price of y with price of x times hedge
+# ratio of the cointegration pair.   The lookback period of the moving average should be in the same scale
+# as the half-life we calculated earlier.  The top and bottom lines represent the trading range of certain
+# standard deviation above and below the middle line.   A trade is entered when price spread hits either the
+# top or bottom Bollinger range and exited when cutting cross the middle of the range.
+
 pass
