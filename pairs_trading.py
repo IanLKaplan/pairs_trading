@@ -280,7 +280,9 @@ def plot_ts(data_v: pd.Series) -> None:
 
 pairs_list = get_pairs(sectors)
 
-cor_a = calc_windowed_correlation(close_prices_df, pairs_list, int(trading_days / 2))
+lookback_window = int(trading_days / 2)
+
+cor_a = calc_windowed_correlation(close_prices_df, pairs_list, lookback_window)
 
 display_histogram(cor_a, 'Correlation between pairs', 'Count')
 
@@ -289,6 +291,7 @@ class PairStats:
     """
     A container for information about a pair
     """
+
     def __init__(self,
                  stock_a: str,
                  stock_b: str,
@@ -422,9 +425,10 @@ class PairsSelection:
 
 correlation_cutoff = 0.75
 pairs_selection = PairsSelection(close_prices=close_prices_df, correlation_cutoff=correlation_cutoff)
-stats_l = pairs_selection.select_pairs(start_ix=0, end_ix=int(trading_days / 2), pairs_list=pairs_list, threshold='1%')
+stats_l = pairs_selection.select_pairs(start_ix=0, end_ix=lookback_window, pairs_list=pairs_list, threshold='1%')
 
-print(f'Number of candidate pairs: {len(pairs_list)}, number of pairs after selection: {len(stats_l)}: {round((len(stats_l) / len(pairs_list)) * 100, 2)} percent')
+print(
+    f'Number of candidate pairs: {len(pairs_list)}, number of pairs after selection: {len(stats_l)}: {round((len(stats_l) / len(pairs_list)) * 100, 2)} percent')
 
 cor_l = [stat.cor_v for stat in stats_l]
 cor_a = np.array(cor_l)
@@ -432,5 +436,24 @@ display_histogram(cor_a, 'Pairs Correlation', 'Count')
 
 res = stats_l[0].residuals
 plot_ts(res)
+
+
+def compute_halflife(prices: pd.Series, lookback_window: int) -> float:
+    """
+    Calculate the half-life of a mean reverting series where the series
+    is a Ornstein–Uhlenbeck process
+    https://quant.stackexchange.com/a/25119
+    """
+    prices_a = prices.values[-lookback_window:]
+    prices_lag = prices_a[1:]
+    prices_trunc = prices_a[0:-1]
+    prices_diff = prices_trunc - prices_lag
+    prices_lag_m = sm.add_constant(prices_lag)
+    res = sm.OLS(prices_diff, prices_lag_m).fit()
+    halflife = -log(2) / res.params[1]
+    return halflife
+
+
+halflife = compute_halflife(prices=close_prices_df['AAPL'], lookback_window=lookback_window)
 
 pass
