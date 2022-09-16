@@ -12,6 +12,12 @@ from numpy import log
 from statsmodels.tsa.stattools import adfuller
 from tabulate import tabulate
 
+# Import seaborn
+import seaborn as sns
+
+# Apply the default theme
+sns.set_theme()
+
 s_and_p_file = 's_and_p_sector_components/sp_stocks.csv'
 s_and_p_data = 's_and_p_data'
 start_date_str = '2007-01-03'
@@ -463,5 +469,10 @@ halflife = compute_halflife(prices=close_prices_df['AAPL'], lookback_window=look
 # as the half-life we calculated earlier.  The top and bottom lines represent the trading range of certain
 # standard deviation above and below the middle line.   A trade is entered when price spread hits either the
 # top or bottom Bollinger range and exited when cutting cross the middle of the range.
+
+first_pair_df = close_prices_df[['AAPL', 'MPWR']]
+
+# https://seaborn.pydata.org/tutorial/regression.html
+sns.regplot(x="total_bill", y="tip", data=tips);
 
 pass
