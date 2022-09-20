@@ -399,13 +399,13 @@ period_start_date_str = '2008-01-03'
 period_start_date: datetime = datetime.fromisoformat(period_start_date_str)
 start_ix = findDateIndex(close_prices_df.index, period_start_date)
 pair_df = close_prices_df[['AAPL', 'MPWR']].iloc[start_ix:start_ix + lookback_window]
-aapl_df = pd.DataFrame(pair_df['AAPL'])
-mpwr_df = pd.DataFrame(pair_df['MPWR'])
-log_aapl_df = log(aapl_df)
-log_mpwr_df = log(mpwr_df)
-c = np.corrcoef(log_aapl_df, log_mpwr_df)
+aapl_s = pair_df['AAPL']
+mpwr_s = pair_df['MPWR']
+log_aapl_s = log(aapl_s)
+log_mpwr_s = log(mpwr_s)
+c = np.corrcoef(log_aapl_s, log_mpwr_s)
 pair_cor = round(c[0, 1], 2)
-log_pair_df = pd.concat([log_aapl_df, log_mpwr_df], axis=1)
+log_pair_df = pd.concat([log_aapl_s, log_mpwr_s], axis=1)
 
 # https://seaborn.pydata.org/tutorial/regression.html
 s = sns.regplot(x=log_pair_df.columns[0], y=log_pair_df.columns[1], data=log_pair_df, scatter_kws={"color": "blue"},
@@ -436,6 +436,8 @@ def apply_return(start_val: float, return_df: pd.DataFrame) -> np.array:
         port_a[i] = port_a[i - 1] + port_a[i - 1] * return_a[i - 1]
     return port_a
 
+aapl_df = pd.DataFrame(aapl_s)
+mpwr_df = pd.DataFrame(mpwr_s)
 ret_aapl = return_df(aapl_df)
 ret_mpwr = return_df(mpwr_df)
 adj_aapl = apply_return(0, ret_aapl)
