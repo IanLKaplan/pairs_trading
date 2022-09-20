@@ -9,6 +9,7 @@ import pandas as pd
 import statsmodels.api as sm
 import yfinance as yf
 from numpy import log
+from pandas import DatetimeIndex
 from statsmodels.tsa.stattools import adfuller
 from tabulate import tabulate
 
@@ -35,6 +36,27 @@ def convert_date(some_date):
         ts = (some_date - np.datetime64('1970-01-01T00:00')) / np.timedelta64(1, 's')
         some_date = datetime.utcfromtimestamp(ts)
     return some_date
+
+
+def findDateIndex(date_index: DatetimeIndex, search_date: datetime) -> int:
+    '''
+    In a DatetimeIndex, find the index of the date that is nearest to search_date.
+    This date will either be equal to search_date or the next date that is less than
+    search_date
+    '''
+    index: int = -1
+    i = 0
+    search_date = convert_date(search_date)
+    date_t = datetime.today()
+    for i in range(0, len(date_index)):
+        date_t = convert_date(date_index[i])
+        if date_t >= search_date:
+            break
+    if date_t > search_date:
+        index = i - 1
+    else:
+        index = i
+    return index
 
 
 def read_s_and_p_stock_info(path: str) -> pd.DataFrame:
@@ -373,12 +395,54 @@ cor_a = calc_windowed_correlation(close_prices_df, pairs_list, lookback_window)
 
 display_histogram(cor_a, 'Correlation between pairs', 'Count')
 
-pair_df = close_prices_df[['AAPL', 'MPWR']].iloc[0:lookback_window]
+period_start_date_str = '2008-01-03'
+period_start_date: datetime = datetime.fromisoformat(period_start_date_str)
+start_ix = findDateIndex(close_prices_df.index, period_start_date)
+pair_df = close_prices_df[['AAPL', 'MPWR']].iloc[start_ix:start_ix + lookback_window]
+aapl_df = pd.DataFrame(pair_df['AAPL'])
+mpwr_df = pd.DataFrame(pair_df['MPWR'])
+log_aapl_df = log(aapl_df)
+log_mpwr_df = log(mpwr_df)
+c = np.corrcoef(log_aapl_df, log_mpwr_df)
+pair_cor = round(c[0, 1], 2)
+log_pair_df = pd.concat([log_aapl_df, log_mpwr_df], axis=1)
 
 # https://seaborn.pydata.org/tutorial/regression.html
-sns.regplot(x=pair_df.columns[0], y=pair_df.columns[1], data=pair_df, scatter_kws={"color": "blue"},
-            line_kws={"color": "red"});
+s = sns.regplot(x=log_pair_df.columns[0], y=log_pair_df.columns[1], data=log_pair_df, scatter_kws={"color": "blue"},
+                line_kws={"color": "red"});
+s.figure.set_size_inches(10, 6)
+s.set(title=f'Correlation {pair_cor}')
 plt.show()
+
+def simple_return(time_series: np.array, period: int = 1) -> List:
+    return list(((time_series[i] / time_series[i - period]) - 1.0 for i in range(period, len(time_series), period)))
+
+
+def return_df(time_series_df: pd.DataFrame) -> pd.DataFrame:
+    r_df: pd.DataFrame = pd.DataFrame()
+    time_series_a: np.array = time_series_df.values
+    return_l = simple_return(time_series_a, 1)
+    r_df = pd.DataFrame(return_l)
+    date_index = time_series_df.index
+    r_df.index = date_index[1:len(date_index)]
+    r_df.columns = time_series_df.columns
+    return r_df
+
+def apply_return(start_val: float, return_df: pd.DataFrame) -> np.array:
+    port_a: np.array = np.zeros(return_df.shape[0] + 1)
+    port_a[0] = start_val
+    return_a = return_df.values
+    for i in range(1, len(port_a)):
+        port_a[i] = port_a[i - 1] + port_a[i - 1] * return_a[i - 1]
+    return port_a
+
+ret_aapl = return_df(aapl_df)
+ret_mpwr = return_df(mpwr_df)
+adj_aapl = apply_return(0, ret_aapl)
+adj_mpwr = apply_return(0, ret_mpwr)
+
+plot_df = pd.concat([adj_aapl, adj_mpwr], axis=1)
+plot_df.plot(grid=True, title=f'AAPL/MPWR', figsize=(10, 6))
 
 
 class PairStats:
