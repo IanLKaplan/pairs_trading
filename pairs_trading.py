@@ -12,6 +12,8 @@ from numpy import log
 from statsmodels.tsa.stattools import adfuller
 from tabulate import tabulate
 
+from multiprocessing import Pool
+
 # Import seaborn
 import seaborn as sns
 
@@ -167,14 +169,14 @@ class MarketData:
         return symbol_df
 
     def get_close_data(self, stock_list: list) -> pd.DataFrame:
+        # fetch the close data in parallel
+        with Pool() as mp_pool:
+            close_list = mp_pool.map(market_data.read_data, stock_l)
         close_df = pd.DataFrame()
-        for stock in stock_list:
-            stock_df = self.read_data(stock)
-            if stock_df.shape[0] > 0:
-                stock_start_date = convert_date(stock_df.head(1).index[0])
-                # filter out stocks with a start date that is later than self.start_date
-                if stock_start_date.date() == self.start_date.date():
-                    close_df = pd.concat([close_df, stock_df], axis=1)
+        for close_data in close_list:
+            stock_start_date = convert_date(close_data.head(1).index[0])
+            if stock_start_date.date() == self.start_date.date():
+                close_df = pd.concat([close_df, close_data], axis=1)
         return close_df
 
 
@@ -223,11 +225,11 @@ def get_pairs(sector_info: dict) -> List[Tuple]:
     return pairs_list
 
 
-def calc_pair_correlation(stock_close_df: pd.DataFrame, pair: Tuple, window: int) -> np.array:
+def calc_pair_correlation(stock_close_df: pd.DataFrame, pair: Tuple, window: int) -> pd.Series:
     """
     Calculate the windowed correlations for a stock pair over the entire data set.
     :param stock_close_df: A data frame containing the stock close prices
-    :param pair: the stock pair
+    :param pair: the stock pair (e.g., a Tuple consisting of two strings for the stock symbols)
     :param window: The data window
     :return: a numpy array of windowed correlations for the pair over the entire time period.
     """
@@ -240,13 +242,78 @@ def calc_pair_correlation(stock_close_df: pd.DataFrame, pair: Tuple, window: int
     a_log_close = log(a_close)
     b_log_close = log(b_close)
 
+    index = stock_close_df.index
+    date_l: List = []
     assert len(a_log_close) == len(b_log_close)
     for i in range(0, len(a_log_close), window):
         sec_a = a_log_close[i:i + window]
         sec_b = b_log_close[i:i + window]
         c = np.corrcoef(sec_a, sec_b)
         cor_v = np.append(cor_v, c[0, 1])
-    return cor_v
+        date_l.append(index[i])
+    cor_s: pd.Series = pd.Series(cor_v)
+    cor_s.index = date_l
+    return cor_s
+
+
+def window_correlation(stock_close_df: pd.DataFrame, pairs_list: List[Tuple], window: int, cutoff: float,
+                       start_ix: int) -> int:
+    count = 0
+    for pair in pairs_list:
+        stock_a = pair[0]
+        stock_b = pair[1]
+        price_a = stock_close_df[stock_a].iloc[start_ix:start_ix + window]
+        price_b = stock_close_df[stock_b].iloc[start_ix:start_ix + window]
+        log_price_a = log(price_a)
+        log_price_b = log(price_b)
+        c = np.corrcoef(log_price_a, log_price_b)
+        if c[0, 1] >= cutoff:
+            count = count + 1
+    return count
+
+
+class WindowedCorrelationDist:
+
+    def __init__(self,
+                 stock_close_df: pd.DataFrame,
+                 pairs_list: List[Tuple],
+                 window: int,
+                 cutoff: float):
+        self.stock_close_df = stock_close_df
+        self.window = window
+        self.cutoff = cutoff
+        self.pairs_list = pairs_list
+
+    def window_correlation(self, start_ix: int) -> int:
+        count = 0
+        for pair in self.pairs_list:
+            stock_a = pair[0]
+            stock_b = pair[1]
+            price_a = self.stock_close_df[stock_a].iloc[start_ix:start_ix + self.window]
+            price_b = self.stock_close_df[stock_b].iloc[start_ix:start_ix + self.window]
+            log_price_a = log(price_a)
+            log_price_b = log(price_b)
+            c = np.corrcoef(log_price_a, log_price_b)
+            if c[0, 1] >= self.cutoff:
+                count = count + 1
+        return count
+
+    def calc_correlation_dist(self) -> pd.Series:
+        """
+        For each windowed time period, calculate the number of pairs with a correlation greater than or equal to cutoff
+        :param stock_close_df:
+        :param pairs_list:
+        :param window:
+        :return: a Series where the data index is the date for the start of the period and the value is the number of stocks
+        """
+
+        start_list = [ix for ix in range(0, self.stock_close_df.shape[0], self.window)]
+        with Pool() as mp_pool:
+            count_l = mp_pool.map(self.window_correlation, start_list)
+        dist_s = pd.Series(count_l)
+        index = self.stock_close_df.index
+        dist_s.index = index[start_list]
+        return dist_s
 
 
 def calc_windowed_correlation(stock_close_df: pd.DataFrame, pairs_list: List[Tuple], window: int) -> np.array:
@@ -260,7 +327,8 @@ def calc_windowed_correlation(stock_close_df: pd.DataFrame, pairs_list: List[Tup
     window = int(window)
     all_cor_v = np.zeros(0)
     for pair in pairs_list:
-        cor_v: np.array = calc_pair_correlation(stock_close_df, pair, window)
+        cor_s: pd.Series = calc_pair_correlation(stock_close_df, pair, window)
+        cor_v = np.array(cor_s.values)
         all_cor_v = np.append(all_cor_v, cor_v)
     return all_cor_v
 
@@ -271,26 +339,46 @@ def display_histogram(data_v: np.array, x_label: str, y_label: str) -> None:
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     ax.grid(True)
-    ax.hist(data_v, bins=num_bins, facecolor='b')
-    ax.axvline(x=np.mean(data_v), color='black')
+    ax.hist(data_v, bins=num_bins, color="blue", ec="blue")
     plt.show()
 
 
-def plot_ts(data_v: pd.Series) -> None:
+def plot_ts(data_s: pd.Series, title: str, x_label: str, y_label: str) -> None:
     fix, ax = plt.subplots(figsize=(10, 8))
     ax.grid(True)
-    data_v.plot()
+    plt.title(title)
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    data_s.plot()
     ax.axhline(y=0, color='black')
     plt.show()
 
 
+lookback_window = int(trading_days / 2)
+apple_tuple: Tuple = ('AAPL', 'MPWR')
+apple_tuple_cor_s = calc_pair_correlation(stock_close_df=close_prices_df, pair=apple_tuple, window=lookback_window)
+plot_ts(data_s=apple_tuple_cor_s, title=f'correlation between {apple_tuple[0]} and {apple_tuple[1]}',
+        x_label='Window Start Date', y_label=f'Correlation over {lookback_window} day window')
+
 pairs_list = get_pairs(sectors)
 
-lookback_window = int(trading_days / 2)
+correlation_cutoff = 0.75
+cor_dist_obj = WindowedCorrelationDist(stock_close_df=close_prices_df, pairs_list=pairs_list, window=lookback_window,
+                                       cutoff=correlation_cutoff)
+cor_dist = cor_dist_obj.calc_correlation_dist()
+plot_ts(data_s=cor_dist, title=f"Pair correlation >= {correlation_cutoff}, by time period", x_label='Correlation',
+        y_label='Count')
 
 cor_a = calc_windowed_correlation(close_prices_df, pairs_list, lookback_window)
 
 display_histogram(cor_a, 'Correlation between pairs', 'Count')
+
+pair_df = close_prices_df[['AAPL', 'MPWR']].iloc[0:lookback_window]
+
+# https://seaborn.pydata.org/tutorial/regression.html
+sns.regplot(x=pair_df.columns[0], y=pair_df.columns[1], data=pair_df, scatter_kws={"color": "blue"},
+            line_kws={"color": "red"});
+plt.show()
 
 
 class PairStats:
@@ -429,7 +517,6 @@ class PairsSelection:
         return pair_stat_l
 
 
-correlation_cutoff = 0.75
 pairs_selection = PairsSelection(close_prices=close_prices_df, correlation_cutoff=correlation_cutoff)
 stats_l = pairs_selection.select_pairs(start_ix=0, end_ix=lookback_window, pairs_list=pairs_list, threshold='1%')
 
@@ -440,8 +527,10 @@ cor_l = [stat.cor_v for stat in stats_l]
 cor_a = np.array(cor_l)
 display_histogram(cor_a, 'Pairs Correlation', 'Count')
 
-res = stats_l[0].residuals
-plot_ts(res)
+res_s = pd.Series(stats_l[0].residuals)
+plot_ts(data_s=res_s, title=f'linear regression residuals for {stats_l[0].stock_a} and {stats_l[0].stock_b}',
+        x_label='Window Start Date', y_label='')
+pass
 
 
 def compute_halflife(prices: pd.Series, lookback_window: int) -> float:
@@ -473,6 +562,8 @@ halflife = compute_halflife(prices=close_prices_df['AAPL'], lookback_window=look
 first_pair_df = close_prices_df[['AAPL', 'MPWR']]
 
 # https://seaborn.pydata.org/tutorial/regression.html
-sns.regplot(x="total_bill", y="tip", data=tips);
+sns.regplot(x=first_pair_df.columns[0], y=first_pair_df.columns[1], data=first_pair_df, scatter_kws={"color": "blue"},
+            line_kws={"color": "red"});
+plt.show()
 
 pass
