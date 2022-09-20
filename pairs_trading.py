@@ -440,8 +440,10 @@ aapl_df = pd.DataFrame(aapl_s)
 mpwr_df = pd.DataFrame(mpwr_s)
 ret_aapl = return_df(aapl_df)
 ret_mpwr = return_df(mpwr_df)
-adj_aapl = apply_return(0, ret_aapl)
-adj_mpwr = apply_return(0, ret_mpwr)
+adj_aapl = pd.DataFrame(apply_return(0, ret_aapl))
+adj_aapl.columns = aapl_df.columns
+adj_mpwr = pd.DataFrame(pd.DataFrame(apply_return(0, ret_mpwr)))
+adj_mpwr.columns = mpwr_df.columns
 
 plot_df = pd.concat([adj_aapl, adj_mpwr], axis=1)
 plot_df.plot(grid=True, title=f'AAPL/MPWR', figsize=(10, 6))
