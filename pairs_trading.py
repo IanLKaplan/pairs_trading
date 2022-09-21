@@ -4,6 +4,8 @@ from datetime import timedelta
 from typing import List, Tuple, Set
 
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
@@ -375,6 +377,24 @@ def plot_ts(data_s: pd.Series, title: str, x_label: str, y_label: str) -> None:
     ax.axhline(y=0, color='black')
     plt.show()
 
+def plot_two_ts(data_a: pd.Series, data_b: pd.Series, title: str, x_label: str, y_label: str) -> None:
+    fig, ax = plt.subplots(figsize=(10, 8))
+    ax.grid(True)
+    plt.gca().xaxis.set_major_locator(mdates.YearLocator())
+    fig.autofmt_xdate()
+    plt.title(title)
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    ax.plot(data_a, 'blue', label=data_a.columns[0])
+    ax.tick_params(axis='y', labelcolor='blue')
+    ax.axhline(y=0, color='black')
+    ax2 = ax.twinx()
+    ax2.plot(data_b, color='green', label=data_b.columns[0])
+    ax2.tick_params(axis='y', labelcolor='green')
+    plt.legend(loc='lower right')
+    plt.show()
+
+
 
 lookback_window = int(trading_days / 2)
 apple_tuple: Tuple = ('AAPL', 'MPWR')
@@ -388,8 +408,13 @@ correlation_cutoff = 0.75
 cor_dist_obj = WindowedCorrelationDist(stock_close_df=close_prices_df, pairs_list=pairs_list, window=lookback_window,
                                        cutoff=correlation_cutoff)
 cor_dist = cor_dist_obj.calc_correlation_dist()
-plot_ts(data_s=cor_dist, title=f"Pair correlation >= {correlation_cutoff}, by time period", x_label='Correlation',
-        y_label='Count')
+
+spy_close_df = market_data.read_data('SPY')
+spy_close_s = spy_close_df[spy_close_df.columns[0]]
+spy_close_s.columns = spy_close_df.columns
+cor_dist.columns = ['Correlation']
+plot_two_ts(data_a=cor_dist, data_b=spy_close_s, title=f"Pair correlation >= {correlation_cutoff}, by time period and SPY",
+        x_label='Window Start Date', y_label=f'Correlation over {lookback_window} day window')
 
 cor_a = calc_windowed_correlation(close_prices_df, pairs_list, lookback_window)
 
@@ -397,21 +422,21 @@ display_histogram(cor_a, 'Correlation between pairs', 'Count')
 
 period_start_date_str = '2008-01-03'
 period_start_date: datetime = datetime.fromisoformat(period_start_date_str)
-start_ix = findDateIndex(close_prices_df.index, period_start_date)
-pair_df = close_prices_df[['AAPL', 'MPWR']].iloc[start_ix:start_ix + lookback_window]
+period_start_ix = findDateIndex(close_prices_df.index, period_start_date)
+pair_df = close_prices_df[['AAPL', 'MPWR']].iloc[period_start_ix:period_start_ix + lookback_window]
 aapl_s = pair_df['AAPL']
 mpwr_s = pair_df['MPWR']
 log_aapl_s = log(aapl_s)
 log_mpwr_s = log(mpwr_s)
 c = np.corrcoef(log_aapl_s, log_mpwr_s)
-pair_cor = round(c[0, 1], 2)
+aapl_mpwr_cor = round(c[0, 1], 2)
 log_pair_df = pd.concat([log_aapl_s, log_mpwr_s], axis=1)
 
 # https://seaborn.pydata.org/tutorial/regression.html
 s = sns.regplot(x=log_pair_df.columns[0], y=log_pair_df.columns[1], data=log_pair_df, scatter_kws={"color": "blue"},
                 line_kws={"color": "red"});
 s.figure.set_size_inches(10, 6)
-s.set(title=f'Correlation {pair_cor}')
+s.set(title=f'Correlation {aapl_mpwr_cor}')
 plt.show()
 
 def simple_return(time_series: np.array, period: int = 1) -> List:
@@ -440,13 +465,17 @@ aapl_df = pd.DataFrame(aapl_s)
 mpwr_df = pd.DataFrame(mpwr_s)
 ret_aapl = return_df(aapl_df)
 ret_mpwr = return_df(mpwr_df)
-adj_aapl = pd.DataFrame(apply_return(0, ret_aapl))
+adj_aapl = pd.DataFrame(apply_return(1, ret_aapl))
 adj_aapl.columns = aapl_df.columns
-adj_mpwr = pd.DataFrame(pd.DataFrame(apply_return(0, ret_mpwr)))
+adj_aapl.index = aapl_df.index
+adj_mpwr = pd.DataFrame(pd.DataFrame(apply_return(1, ret_mpwr)))
 adj_mpwr.columns = mpwr_df.columns
+adj_mpwr.index = mpwr_df.index
 
 plot_df = pd.concat([adj_aapl, adj_mpwr], axis=1)
 plot_df.plot(grid=True, title=f'AAPL/MPWR', figsize=(10, 6))
+plt.axhline(y=1, color='red')
+plt.show()
 
 
 class PairStats:
@@ -586,6 +615,9 @@ class PairsSelection:
 
 
 pairs_selection = PairsSelection(close_prices=close_prices_df, correlation_cutoff=correlation_cutoff)
+aapl_mpwr_pair = ('AAPL', 'MPWR', 'information-technology', aapl_mpwr_cor)
+pair_stats = pairs_selection.stationary_analysis(start_ix=period_start_ix, end_ix=period_start_ix+lookback_window, pair=aapl_mpwr_pair)
+
 stats_l = pairs_selection.select_pairs(start_ix=0, end_ix=lookback_window, pairs_list=pairs_list, threshold='1%')
 
 print(
