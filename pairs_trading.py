@@ -378,6 +378,8 @@ def plot_ts(data_s: pd.Series, title: str, x_label: str, y_label: str) -> None:
     plt.show()
 
 def plot_two_ts(data_a: pd.Series, data_b: pd.Series, title: str, x_label: str, y_label: str) -> None:
+    color_a = 'blue'
+    color_b = 'green'
     fig, ax = plt.subplots(figsize=(10, 8))
     ax.grid(True)
     plt.gca().xaxis.set_major_locator(mdates.YearLocator())
@@ -385,12 +387,11 @@ def plot_two_ts(data_a: pd.Series, data_b: pd.Series, title: str, x_label: str, 
     plt.title(title)
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
-    ax.plot(data_a, 'blue', label=data_a.columns[0])
-    ax.tick_params(axis='y', labelcolor='blue')
-    ax.axhline(y=0, color='black')
+    ax.plot(data_a, color=color_a, label=data_a.columns[0])
+    ax.tick_params(axis='y', labelcolor=color_a)
     ax2 = ax.twinx()
-    ax2.plot(data_b, color='green', label=data_b.columns[0])
-    ax2.tick_params(axis='y', labelcolor='green')
+    ax2.plot(data_b, color=color_b, label=data_b.columns[0])
+    ax2.tick_params(axis='y', labelcolor=color_b)
     plt.legend(loc='lower right')
     plt.show()
 
@@ -461,19 +462,23 @@ def apply_return(start_val: float, return_df: pd.DataFrame) -> np.array:
         port_a[i] = port_a[i - 1] + port_a[i - 1] * return_a[i - 1]
     return port_a
 
-aapl_df = pd.DataFrame(aapl_s)
-mpwr_df = pd.DataFrame(mpwr_s)
-ret_aapl = return_df(aapl_df)
-ret_mpwr = return_df(mpwr_df)
-adj_aapl = pd.DataFrame(apply_return(1, ret_aapl))
-adj_aapl.columns = aapl_df.columns
-adj_aapl.index = aapl_df.index
-adj_mpwr = pd.DataFrame(pd.DataFrame(apply_return(1, ret_mpwr)))
-adj_mpwr.columns = mpwr_df.columns
-adj_mpwr.index = mpwr_df.index
 
-plot_df = pd.concat([adj_aapl, adj_mpwr], axis=1)
-plot_df.plot(grid=True, title=f'AAPL/MPWR', figsize=(10, 6))
+def calc_holding_return(close_prices_df: pd.DataFrame, symbol: str, start_ix: int, end_ix: int, holding: int) -> pd.DataFrame:
+    stock_df = pd.DataFrame(close_prices_df[symbol].iloc[start_ix:end_ix])
+    stock_ret = return_df(stock_df)
+    holding_ret_df = pd.DataFrame(apply_return(holding, stock_ret))
+    holding_ret_df.columns = [symbol]
+    holding_ret_df.index = stock_df.index
+    return holding_ret_df
+
+
+holding_ret_aapl = calc_holding_return(close_prices_df=close_prices_df, symbol='AAPL', start_ix=period_start_ix,
+                                       end_ix=period_start_ix + lookback_window, holding=1)
+holding_ret_mpwr = calc_holding_return(close_prices_df=close_prices_df, symbol='MPWR', start_ix=period_start_ix,
+                                       end_ix=period_start_ix + lookback_window, holding=1)
+
+plot_df = pd.concat([holding_ret_aapl, holding_ret_mpwr], axis=1)
+plot_df.plot(grid=True, title=f'AAPL/MPWR with a $1 investment', figsize=(10, 6))
 plt.axhline(y=1, color='red')
 plt.show()
 
@@ -630,7 +635,6 @@ display_histogram(cor_a, 'Pairs Correlation', 'Count')
 res_s = pd.Series(stats_l[0].residuals)
 plot_ts(data_s=res_s, title=f'linear regression residuals for {stats_l[0].stock_a} and {stats_l[0].stock_b}',
         x_label='Window Start Date', y_label='')
-pass
 
 
 def compute_halflife(prices: pd.Series, lookback_window: int) -> float:
