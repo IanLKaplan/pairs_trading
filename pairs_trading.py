@@ -433,6 +433,15 @@ c = np.corrcoef(log_aapl_s, log_mpwr_s)
 aapl_mpwr_cor = round(c[0, 1], 2)
 log_pair_df = pd.concat([log_aapl_s, log_mpwr_s], axis=1)
 
+def calc_pair_correlation(close_prices_df: pd.DataFrame, sym_a: str, sym_b: str, start_ix: int, end_ix: int) -> float:
+    stock_a_s = pair_df[sym_a]
+    stock_b_s = pair_df[sym_b]
+    log_stock_a_s = log(stock_a_s)
+    log_stock_b_s = log(stock_b_s)
+    c = np.corrcoef(log_stock_a_s, log_stock_b_s)
+    pair_cor = round(c[0, 1], 2)
+    return pair_cor
+
 # https://seaborn.pydata.org/tutorial/regression.html
 s = sns.regplot(x=log_pair_df.columns[0], y=log_pair_df.columns[1], data=log_pair_df, scatter_kws={"color": "blue"},
                 line_kws={"color": "red"});
@@ -621,7 +630,11 @@ class PairsSelection:
 
 pairs_selection = PairsSelection(close_prices=close_prices_df, correlation_cutoff=correlation_cutoff)
 aapl_mpwr_pair = ('AAPL', 'MPWR', 'information-technology', aapl_mpwr_cor)
-pair_stats = pairs_selection.stationary_analysis(start_ix=period_start_ix, end_ix=period_start_ix+lookback_window, pair=aapl_mpwr_pair)
+pair_stats_2008 = pairs_selection.stationary_analysis(start_ix=period_start_ix, end_ix=period_start_ix+lookback_window, pair=aapl_mpwr_pair)
+
+
+
+pair_stats_2007 = pairs_selection.stationary_analysis(start_ix=0, end_ix=lookback_window, pair=aapl_mpwr_pair)
 
 stats_l = pairs_selection.select_pairs(start_ix=0, end_ix=lookback_window, pairs_list=pairs_list, threshold='1%')
 
