@@ -37,16 +37,17 @@ def convert_date(some_date):
     elif type(some_date) == np.datetime64:
         ts = (some_date - np.datetime64('1970-01-01T00:00')) / np.timedelta64(1, 's')
         some_date = datetime.utcfromtimestamp(ts)
+    # round datatime to year, month, day
+    some_date = datetime(*some_date.timetuple()[:3])
     return some_date
 
 
 def findDateIndex(date_index: DatetimeIndex, search_date: datetime) -> int:
-    '''
+    """
     In a DatetimeIndex, find the index of the date that is nearest to search_date.
     This date will either be equal to search_date or the next date that is less than
     search_date
-    '''
-    index: int = -1
+    """
     i = 0
     search_date = convert_date(search_date)
     date_t = datetime.today()
@@ -136,11 +137,10 @@ class MarketData:
     This class supports retrieving and storing stock market close data from Yahoo.
     """
 
-    def __init__(self, start_date: datetime, path: str, update_data: bool = True):
-        self.start_date = start_date
+    def __init__(self, start_date: datetime, path: str):
+        self.start_date = convert_date(start_date)
         self.path = path
-        self.end_date: datetime = datetime.today() - timedelta(days=1)
-        self.update_data = update_data
+        self.end_date: datetime = convert_date(datetime.today() - timedelta(days=1))
 
     def get_market_data(self,
                         symbol: str,
@@ -150,7 +150,6 @@ class MarketData:
         if type(symbol) == str:
             t = list()
             t.append(symbol)
-            symbols = t
         panel_data = yf.download(tickers=symbol, start=start_date, end=end_date, progress=False)
         if panel_data.shape[0] > 0:
             close_data: pd.DataFrame = panel_data[data_col]
@@ -158,54 +157,69 @@ class MarketData:
             close_data = pd.DataFrame()
         close_data = close_data.round(2)
         close_data_df = pd.DataFrame(close_data)
+        index = pd.to_datetime(close_data_df.index.strftime('%Y-%m-%d'))
+        close_data_df.index = index
         return close_data_df
 
     def symbol_file_path(self, symbol: str) -> str:
         path: str = self.path + os.path.sep + symbol.upper() + '.csv'
         return path
 
+    def df_last_date(self, data_df: pd.DataFrame) -> datetime:
+        last_row = data_df.tail(1)
+        last_date = convert_date(last_row.index[0])
+        return last_date
+
     def read_data(self, symbol: str) -> pd.DataFrame:
         file_path = self.symbol_file_path(symbol)
+        # Check to see if the file exists
         if os.access(file_path, os.R_OK):
+            # The file exists, so read the CSV data
             symbol_df = pd.read_csv(file_path, index_col='Date')
-            if self.update_data:
-                last_row = symbol_df.tail(1)
-                last_date = convert_date(last_row.index[0])
-                if last_date.date() < self.end_date.date():
-                    sym_start_date = last_date + timedelta(days=1)
-                    new_data_df = self.get_market_data(symbol, sym_start_date, datetime.today())
-                    if new_data_df.shape[0] > 0:
+            if symbol_df.shape[0] == 0:
+                # it's possible that the file has no data in it, so see if we can read the market data
+                symbol_df = self.get_market_data(symbol, self.start_date, self.end_date)
+        else:  # The file doesn't exist, so see if we can get the market data
+            symbol_df = self.get_market_data(symbol, self.start_date, self.end_date)
+        if symbol_df.shape[0] > 0:
+            last_date = self.df_last_date(symbol_df)
+            if last_date.date() < self.end_date.date():
+                sym_start_date = last_date - timedelta(weeks=1)
+                new_data_df = self.get_market_data(symbol, sym_start_date, self.end_date)
+                if new_data_df.shape[0] > 0:
+                    new_last_date = self.df_last_date(new_data_df)
+                    if new_last_date > last_date:
                         symbol_df = pd.concat([symbol_df, new_data_df], axis=0)
                         ix = symbol_df.index
                         ix = pd.to_datetime(ix)
                         symbol_df.index = ix
-                        symbol_df.to_csv(file_path)
-        else:
-            symbol_df = self.get_market_data(symbol, self.start_date, self.end_date)
-            if symbol_df.shape[0] > 0:
-                if not os.access(self.path, os.R_OK):
-                    os.mkdir(self.path)
-                symbol_df.to_csv(file_path)
-                if type(symbol_df) != pd.DataFrame:
-                    symbol_df = pd.DataFrame(symbol_df)
-        if symbol_df.shape[0] > 0:
+            if not os.access(self.path, os.R_OK):
+                os.mkdir(self.path)
+            if type(symbol_df) != pd.DataFrame:
+                symbol_df = pd.DataFrame(symbol_df)
+            symbol_df.to_csv(file_path)
             symbol_df.columns = [symbol]
         return symbol_df
 
     def get_close_data(self, stock_list: list) -> pd.DataFrame:
         # fetch the close data in parallel
-        with Pool() as mp_pool:
-            close_list = mp_pool.map(market_data.read_data, stock_l)
         close_df = pd.DataFrame()
+        assert len(stock_list) > 0
+        with Pool() as mp_pool:
+            close_list = mp_pool.map(self.read_data, stock_list)
+        # close_list = list()
+        # for sym in stock_list:
+        #     sym_close_df = self.read_data(sym)
+        #     close_list.append(sym_close_df)
         for close_data in close_list:
-            stock_start_date = convert_date(close_data.head(1).index[0])
-            if stock_start_date.date() == self.start_date.date():
-                close_df = pd.concat([close_df, close_data], axis=1)
+            close_df = pd.concat([close_df, close_data], axis=1)
+        # drop the stocks with different start dates
+        close_df = close_df.dropna(axis='columns')
         return close_df
 
 
 stock_info_df = read_s_and_p_stock_info(s_and_p_file)
-market_data = MarketData(start_date=start_date, path=s_and_p_data, update_data=True)
+market_data = MarketData(start_date=start_date, path=s_and_p_data)
 stock_l: list = list(set(stock_info_df['Symbol']))
 stock_l.sort()
 close_prices_df = market_data.get_close_data(stock_l)
@@ -323,14 +337,6 @@ class WindowedCorrelationDist:
         return count
 
     def calc_correlation_dist(self) -> pd.Series:
-        """
-        For each windowed time period, calculate the number of pairs with a correlation greater than or equal to cutoff
-        :param stock_close_df:
-        :param pairs_list:
-        :param window:
-        :return: a Series where the data index is the date for the start of the period and the value is the number of stocks
-        """
-
         start_list = [ix for ix in range(0, self.stock_close_df.shape[0], self.window)]
         with Pool() as mp_pool:
             count_l = mp_pool.map(self.window_correlation, start_list)
@@ -346,6 +352,7 @@ def calc_windowed_correlation(stock_close_df: pd.DataFrame, pairs_list: List[Tup
 
     :param stock_close_df: A data frame containing the stock close prices. The columns are the stock tickers.
     :param pairs_list: A list of the pairs formed from the S&P 500 sectors.
+    :param window: the window size
     :return: A numpy array with the correlcations.
     """
     window = int(window)
@@ -377,6 +384,7 @@ def plot_ts(data_s: pd.Series, title: str, x_label: str, y_label: str) -> None:
     ax.axhline(y=0, color='black')
     plt.show()
 
+
 def plot_two_ts(data_a: pd.Series, data_b: pd.Series, title: str, x_label: str, y_label: str) -> None:
     color_a = 'blue'
     color_b = 'green'
@@ -396,7 +404,6 @@ def plot_two_ts(data_a: pd.Series, data_b: pd.Series, title: str, x_label: str, 
     plt.show()
 
 
-
 lookback_window = int(trading_days / 2)
 apple_tuple: Tuple = ('AAPL', 'MPWR')
 apple_tuple_cor_s = calc_pair_correlation(stock_close_df=close_prices_df, pair=apple_tuple, window=lookback_window)
@@ -414,8 +421,9 @@ spy_close_df = market_data.read_data('SPY')
 spy_close_s = spy_close_df[spy_close_df.columns[0]]
 spy_close_s.columns = spy_close_df.columns
 cor_dist.columns = ['Correlation']
-plot_two_ts(data_a=cor_dist, data_b=spy_close_s, title=f"Pair correlation >= {correlation_cutoff}, by time period and SPY",
-        x_label='Window Start Date', y_label=f'Correlation over {lookback_window} day window')
+plot_two_ts(data_a=cor_dist, data_b=spy_close_s,
+            title=f"Pair correlation >= {correlation_cutoff}, by time period and SPY",
+            x_label='Window Start Date', y_label=f'Correlation over {lookback_window} day window')
 
 cor_a = calc_windowed_correlation(close_prices_df, pairs_list, lookback_window)
 
@@ -433,6 +441,7 @@ c = np.corrcoef(log_aapl_s, log_mpwr_s)
 aapl_mpwr_cor = round(c[0, 1], 2)
 log_pair_df = pd.concat([log_aapl_s, log_mpwr_s], axis=1)
 
+
 def calc_pair_correlation(close_prices_df: pd.DataFrame, sym_a: str, sym_b: str, start_ix: int, end_ix: int) -> float:
     stock_a_s = pair_df[sym_a]
     stock_b_s = pair_df[sym_b]
@@ -442,19 +451,20 @@ def calc_pair_correlation(close_prices_df: pd.DataFrame, sym_a: str, sym_b: str,
     pair_cor = round(c[0, 1], 2)
     return pair_cor
 
+
 # https://seaborn.pydata.org/tutorial/regression.html
 s = sns.regplot(x=log_pair_df.columns[0], y=log_pair_df.columns[1], data=log_pair_df, scatter_kws={"color": "blue"},
-                line_kws={"color": "red"});
+                line_kws={"color": "red"})
 s.figure.set_size_inches(10, 6)
 s.set(title=f'Correlation {aapl_mpwr_cor}')
 plt.show()
+
 
 def simple_return(time_series: np.array, period: int = 1) -> List:
     return list(((time_series[i] / time_series[i - period]) - 1.0 for i in range(period, len(time_series), period)))
 
 
 def return_df(time_series_df: pd.DataFrame) -> pd.DataFrame:
-    r_df: pd.DataFrame = pd.DataFrame()
     time_series_a: np.array = time_series_df.values
     return_l = simple_return(time_series_a, 1)
     r_df = pd.DataFrame(return_l)
@@ -462,6 +472,7 @@ def return_df(time_series_df: pd.DataFrame) -> pd.DataFrame:
     r_df.index = date_index[1:len(date_index)]
     r_df.columns = time_series_df.columns
     return r_df
+
 
 def apply_return(start_val: float, return_df: pd.DataFrame) -> np.array:
     port_a: np.array = np.zeros(return_df.shape[0] + 1)
@@ -472,7 +483,8 @@ def apply_return(start_val: float, return_df: pd.DataFrame) -> np.array:
     return port_a
 
 
-def calc_holding_return(close_prices_df: pd.DataFrame, symbol: str, start_ix: int, end_ix: int, holding: int) -> pd.DataFrame:
+def calc_holding_return(close_prices_df: pd.DataFrame, symbol: str, start_ix: int, end_ix: int,
+                        holding: int) -> pd.DataFrame:
     stock_df = pd.DataFrame(close_prices_df[symbol].iloc[start_ix:end_ix])
     stock_ret = return_df(stock_df)
     holding_ret_df = pd.DataFrame(apply_return(holding, stock_ret))
@@ -603,16 +615,13 @@ class PairsSelection:
     def select_pairs(self, start_ix: int, end_ix: int, pairs_list: List[Tuple], threshold: str) -> List[PairStats]:
         """
 
-        :param start_ix: start index in close price DataFrame
-        :param end_ix:  end index in close price DataFrame
-        :param pairs_list: a list of tuples (stock_a, stock_b, sector)
-        :param threshold: a string equal to '1%', '5%' or '10%'
-        :return: pairs that are correlated and have regression residuals that show mean reversion to the threshold level
-                 Only unique pairs of stocks are returned. If there are two canidate pairs that both have AAPL, for example,
-                 only one pair will be returned so that a stock does not appear twice in the set of pairs.
+        :param start_ix: start index in close price DataFrame :param end_ix:  end index in close price DataFrame
+        :param pairs_list: a list of tuples (stock_a, stock_b, sector) :param threshold: a string equal to '1%',
+        '5%' or '10%' :return: pairs that are correlated and have regression residuals that show mean reversion to
+        the threshold level Only unique pairs of stocks are returned. If there are two canidate pairs that both have
+        AAPL, for example, only one pair will be returned so that a stock does not appear twice in the set of pairs.
         """
         selected_pairs = self.pairs_correlation(start_ix=start_ix, end_ix=end_ix, pairs_list=pairs_list)
-
         stock_set: Set = set()
         pair_stat_l: List[PairStats] = list()
         for pair in selected_pairs:
@@ -630,9 +639,8 @@ class PairsSelection:
 
 pairs_selection = PairsSelection(close_prices=close_prices_df, correlation_cutoff=correlation_cutoff)
 aapl_mpwr_pair = ('AAPL', 'MPWR', 'information-technology', aapl_mpwr_cor)
-pair_stats_2008 = pairs_selection.stationary_analysis(start_ix=period_start_ix, end_ix=period_start_ix+lookback_window, pair=aapl_mpwr_pair)
-
-
+pair_stats_2008 = pairs_selection.stationary_analysis(start_ix=period_start_ix,
+                                                      end_ix=period_start_ix + lookback_window, pair=aapl_mpwr_pair)
 
 pair_stats_2007 = pairs_selection.stationary_analysis(start_ix=0, end_ix=lookback_window, pair=aapl_mpwr_pair)
 
@@ -680,7 +688,7 @@ first_pair_df = close_prices_df[['AAPL', 'MPWR']]
 
 # https://seaborn.pydata.org/tutorial/regression.html
 sns.regplot(x=first_pair_df.columns[0], y=first_pair_df.columns[1], data=first_pair_df, scatter_kws={"color": "blue"},
-            line_kws={"color": "red"});
+            line_kws={"color": "red"})
 plt.show()
 
 pass
