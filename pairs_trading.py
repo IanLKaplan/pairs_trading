@@ -31,7 +31,7 @@ start_date: datetime = datetime.fromisoformat(start_date_str)
 trading_days = 252
 
 
-def convert_date(some_date):
+def convert_date(some_date) -> datetime:
     if type(some_date) == str:
         some_date = datetime.fromisoformat(some_date)
     elif type(some_date) == np.datetime64:
@@ -140,7 +140,8 @@ class MarketData:
     def __init__(self, start_date: datetime, path: str):
         self.start_date = convert_date(start_date)
         self.path = path
-        self.end_date: datetime = convert_date(datetime.today() - timedelta(days=1))
+        # self.end_date: datetime = convert_date(datetime.today() - timedelta(days=1))
+        self.end_date: datetime = convert_date(datetime.today())
 
     def get_market_data(self,
                         symbol: str,
@@ -170,34 +171,51 @@ class MarketData:
         last_date = convert_date(last_row.index[0])
         return last_date
 
+    def findDateIndexFromEnd(self, data_df: pd.DataFrame, search_date: datetime) -> int:
+        found_index = -1
+        search_date = convert_date(search_date)
+        index = data_df.index
+        for i in range(len(index)-1, -1, -1):
+            ix_date = convert_date(index[i])
+            if ix_date == search_date:
+                found_index = i
+                break
+        return found_index
+
+
     def read_data(self, symbol: str) -> pd.DataFrame:
+        changed = False
         file_path = self.symbol_file_path(symbol)
         # Check to see if the file exists
+        symbol_df = pd.DataFrame()
         if os.access(file_path, os.R_OK):
             # The file exists, so read the CSV data
             symbol_df = pd.read_csv(file_path, index_col='Date')
-            if symbol_df.shape[0] == 0:
-                # it's possible that the file has no data in it, so see if we can read the market data
-                symbol_df = self.get_market_data(symbol, self.start_date, self.end_date)
-        else:  # The file doesn't exist, so see if we can get the market data
+        if symbol_df.shape[0] == 0:
+            # Either the file contained no data or it didn't exist
             symbol_df = self.get_market_data(symbol, self.start_date, self.end_date)
         if symbol_df.shape[0] > 0:
             last_date = self.df_last_date(symbol_df)
-            if last_date.date() < self.end_date.date():
+            if last_date.date() < (self.end_date - timedelta(days=1)).date():
                 sym_start_date = last_date - timedelta(weeks=1)
                 new_data_df = self.get_market_data(symbol, sym_start_date, self.end_date)
                 if new_data_df.shape[0] > 0:
                     new_last_date = self.df_last_date(new_data_df)
                     if new_last_date > last_date:
-                        symbol_df = pd.concat([symbol_df, new_data_df], axis=0)
-                        ix = symbol_df.index
-                        ix = pd.to_datetime(ix)
-                        symbol_df.index = ix
+                        last_date_ix = self.findDateIndexFromEnd(new_data_df, last_date)
+                        if last_date_ix+1 < new_data_df.shape[0]:
+                            new_data_sec = new_data_df.iloc[last_date_ix+1:]
+                            symbol_df = pd.concat([symbol_df, new_data_sec], axis=0)
+                            ix = symbol_df.index
+                            ix = pd.to_datetime(ix)
+                            symbol_df.index = ix
+                            changed = True
             if not os.access(self.path, os.R_OK):
                 os.mkdir(self.path)
             if type(symbol_df) != pd.DataFrame:
                 symbol_df = pd.DataFrame(symbol_df)
-            symbol_df.to_csv(file_path)
+            if changed:
+                symbol_df.to_csv(file_path)
             symbol_df.columns = [symbol]
         return symbol_df
 
