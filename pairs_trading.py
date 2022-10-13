@@ -495,7 +495,7 @@ def return_df(time_series_df: pd.DataFrame) -> pd.DataFrame:
 def apply_return(start_val: float, return_df: pd.DataFrame) -> np.array:
     port_a: np.array = np.zeros(return_df.shape[0] + 1)
     port_a[0] = start_val
-    return_a = return_df.values
+    return_a = np.array(return_df.values)
     for i in range(1, len(port_a)):
         port_a[i] = port_a[i - 1] + port_a[i - 1] * return_a[i - 1]
     return port_a
@@ -615,7 +615,7 @@ class PairsSelection:
         # https://www.quantstart.com/articles/Basics-of-Statistical-Mean-Reversion-Testing-Part-II/
         # p-value <= 0.05 stationary mean reverting TS
         # ADF more negative means a stronger mean reverting process
-        adf_result: Tuple = adfuller(residuals)
+        adf_result: tuple = adfuller(residuals)
         adf_stat = round(adf_result[0], self.decimals)
         p_value = round(adf_result[1], self.decimals)
         critical_vals = adf_result[4]
