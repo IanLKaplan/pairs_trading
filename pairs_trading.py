@@ -1,27 +1,22 @@
 import os
 from datetime import datetime
-from datetime import timedelta
+from multiprocessing import Pool
 from typing import List, Tuple, Set
 
-import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+# Import seaborn
+import seaborn as sns
 import statsmodels.api as sm
-import yfinance as yf
 from numpy import log
-from pandas import DatetimeIndex
 from statsmodels.tsa.stattools import adfuller
 from tabulate import tabulate
 
-from multiprocessing import Pool
-
-# Import seaborn
-import seaborn as sns
-
-from utils.convert_date import convert_date
+# local libraries
 from read_market_data.MarketData import MarketData
+from utils.find_date_index import findDateIndex
 
 # Apply the default theme
 sns.set_theme()
@@ -32,26 +27,6 @@ start_date_str = '2007-01-03'
 start_date: datetime = datetime.fromisoformat(start_date_str)
 
 trading_days = 252
-
-
-def findDateIndex(date_index: DatetimeIndex, search_date: datetime) -> int:
-    """
-    In a DatetimeIndex, find the index of the date that is nearest to search_date.
-    This date will either be equal to search_date or the next date that is less than
-    search_date
-    """
-    i = 0
-    search_date = convert_date(search_date)
-    date_t = datetime.today()
-    for i in range(0, len(date_index)):
-        date_t = convert_date(date_index[i])
-        if date_t >= search_date:
-            break
-    if date_t > search_date:
-        index = i - 1
-    else:
-        index = i
-    return index
 
 
 def read_s_and_p_stock_info(path: str) -> pd.DataFrame:
