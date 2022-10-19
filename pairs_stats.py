@@ -154,12 +154,22 @@ plt.show()
 rslt = least_squares(pd.DataFrame(d2007_close_adj_df[d2008_close_adj_df.columns[0]]), pd.DataFrame(d2007_close_adj_df[d2008_close_adj_df.columns[1]]))
 
 johansen_rslt = coint_johansen(d2007_close_adj_df, 0, 1)
-hedge = pd.DataFrame(johansen_rslt.evec[0])
-hedge.columns = d2008_close_adj_df.columns
-critical_vals = pd.DataFrame(johansen_rslt.trace_stat_crit_vals[0])
+hedge = pd.DataFrame([johansen_rslt.evec[0,0]])
+hedge.columns = ['AAPL']
+critical_vals = pd.DataFrame(johansen_rslt.trace_stat_crit_vals[0]).transpose()
 critical_vals.columns = ['90', '95', '99']
 trace_stat = johansen_rslt.trace_stat[0]
 
+stationary_a = d2007_close_df['MPWR'].values - hedge.values * d2007_close_df['AAPL'].values
+stationary_df = pd.DataFrame(stationary_a.flatten())
+stationary_df.index = d2007_close_df.index
+stationary_df.plot(grid=True, title=f'stationary time series', figsize=(10, 6))
+stat_mean = stationary_df.mean()[0]
+stat_sd = stationary_df.std()[0]
+plt.axhline(y=stat_mean, color='black', linewidth=2)
+plt.axhline(y=stat_mean + stat_sd, color='red', linewidth=1, linestyle='--')
+plt.axhline(y=stat_mean - stat_sd, color='green', linewidth=1, linestyle='--')
+plt.show()
 
 
 pass
