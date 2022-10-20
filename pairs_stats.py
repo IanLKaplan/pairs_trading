@@ -12,6 +12,8 @@ from tabulate import tabulate
 from utils.find_date_index import findDateIndex
 from read_market_data.MarketData import MarketData
 
+from statsmodels.tsa.stattools import adfuller
+
 
 trading_days = 252
 s_and_p_data = 's_and_p_data'
@@ -151,14 +153,16 @@ d2007_plot_df = pd.concat([d2007_close_win_df, d2007_sd_top, d2007_running_mean,
 d2007_plot_df.plot(grid=True, title=f'AAPL/MPWR and mean Jan 3, 2007', figsize=(10, 6))
 plt.show()
 
-rslt = least_squares(pd.DataFrame(d2007_close_adj_df[d2008_close_adj_df.columns[0]]), pd.DataFrame(d2007_close_adj_df[d2008_close_adj_df.columns[1]]))
+rslt = least_squares(pd.DataFrame(d2007_close_df['MPWR']), pd.DataFrame(d2007_close_df['AAPL']))
 
-johansen_rslt = coint_johansen(d2007_close_adj_df, 0, 1)
+johansen_rslt = coint_johansen(d2007_close_df, 0, 1)
 hedge = pd.DataFrame([johansen_rslt.evec[0,0]])
 hedge.columns = ['AAPL']
 critical_vals = pd.DataFrame(johansen_rslt.trace_stat_crit_vals[0]).transpose()
 critical_vals.columns = ['90', '95', '99']
 trace_stat = johansen_rslt.trace_stat[0]
+
+adf_result = adfuller(rslt.residuals)
 
 stationary_a = d2007_close_df['MPWR'].values - hedge.values * d2007_close_df['AAPL'].values
 stationary_df = pd.DataFrame(stationary_a.flatten())
