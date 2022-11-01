@@ -385,6 +385,46 @@ plt.axhline(y=1, color='red')
 plt.show()
 
 
+class CointData:
+    def __init__(self,
+                 cointegrated: bool,
+                 weight: float,
+                 confidence: float):
+        self.cointegrated = cointegrated
+        self.weight = weight
+        self.confidence = confidence
+
+
+class PairStatistics:
+    def __init__(self):
+        self.decimals = 2
+        pass
+
+    def correlation(self, data_a: pd.DataFrame, data_b: pd.DataFrame) -> float:
+        c = np.corrcoef(data_a, data_b)
+        cor_v = round(c[0, 1], 2)
+        return cor_v
+
+    def engle_granger_coint(self, conf_level: str, data_a: pd.DataFrame, data_b: pd.DataFrame) -> CointData:
+        data_b_const = sm.add_constant(data_b)
+        result_ab = sm.OLS(data_a, data_b_const).fit()
+        data_a_const = sm.add_constant(data_a)
+        result_ba = sm.OLS(data_b, data_a_const).fit()
+        slope_ab = result_ab.params[data_b.columns[0]]
+        slope_ba = result_ba.params[data_a.columns[0]]
+        result = result_ab
+        slope = slope_ab
+        if slope_ab < slope_ba:
+            result = result_ba
+            slope = slope_ba
+        intercept = round(result.params['const'], self.decimals)
+        slope = round(slope, self.decimals)
+        residuals = result.resid
+        adf_result = adfuller(residuals)
+        adf_stat = round(adf_result[0], self.decimals)
+        critical_vals = adf_result[4]
+
+
 class PairStats:
     """
     A container for information about a pair
