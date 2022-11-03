@@ -2,8 +2,6 @@ from datetime import datetime
 from typing import Tuple
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
-from statsmodels.tsa.vector_ar.vecm import coint_johansen
-
 import pandas as pd
 import numpy as np
 from numpy import log
@@ -12,6 +10,7 @@ from tabulate import tabulate
 from utils.find_date_index import findDateIndex
 from read_market_data.MarketData import MarketData
 
+from statsmodels.tsa.vector_ar.vecm import coint_johansen
 from statsmodels.tsa.stattools import adfuller
 
 
@@ -126,8 +125,9 @@ class PairStatistics:
     def johansen_coint(self, data_a: pd.DataFrame, data_b: pd.DataFrame) -> CointData:
         ts_df = pd.concat([data_a, data_b], axis=1)
         johansen_rslt_ab = coint_johansen(ts_df, 0, 1)
-        hedge_ab = pd.DataFrame([johansen_rslt_ab.evec[0, 0] / johansen_rslt_ab.evec[1, 0]])
-        hedge_ab.columns = [d2007_close_df.columns[0]]
+        hedge_ab_val = np.abs(johansen_rslt_ab.evec[0, 0] / johansen_rslt_ab.evec[1, 0])
+        hedge_ab = pd.DataFrame([hedge_ab_val])
+        hedge_ab.columns = [data_a.columns[0]]
         critical_vals_ab = pd.DataFrame(johansen_rslt_ab.trace_stat_crit_vals[0]).transpose()
         critical_vals_ab.columns = ['10%', '5%', '1%']
         critical_vals_dict = critical_vals_ab.to_dict('records')[0]
@@ -185,33 +185,38 @@ half_year = int(trading_days/2)
 d2007_ix = 0
 d2008_ix = findDateIndex(close_index, d2008_start_date)
 
-d2007_close_df = close_prices_df.iloc[d2007_ix:d2007_ix+half_year]
-d2008_close_df = close_prices_df.iloc[d2008_ix:d2008_ix+half_year]
 
-d2007_cor = round(d2007_close_df.corr().iloc[0,1], 2)
-d2008_cor = round(d2008_close_df.corr().iloc[0,1], 2)
+d2007_close = pd.DataFrame(close_prices_df[['AAPL', 'MPWR']]).iloc[d2007_ix:d2007_ix+half_year]
+d2008_close = pd.DataFrame(close_prices_df[['AAPL', 'MPWR']]).iloc[d2008_ix:d2008_ix+half_year]
+
+d2007_cor = round(d2007_close.corr().iloc[0,1], 2)
+d2008_cor = round(d2008_close.corr().iloc[0,1], 2)
 cor_df = pd.DataFrame([d2007_cor, d2008_cor])
 cor_df.index = ['2007', '2008']
-cor_df.columns = [f'correlation [{close_prices_df.columns[0]},{close_prices_df.columns[1]}]']
+cor_df.columns = [f'correlation [{d2007_close.columns[0]},{d2007_close.columns[1]}]']
 
 print()
 print(tabulate(cor_df, headers=[*cor_df.columns], tablefmt='fancy_grid'))
 
-d2007_aapl = pd.DataFrame(d2007_close_df['AAPL'])
-d2007_mpwr = pd.DataFrame(d2007_close_df['MPWR'])
+d2007_aapl = pd.DataFrame(d2007_close['AAPL'])
+d2007_mpwr = pd.DataFrame(d2007_close['MPWR'])
 
 pair_stat = PairStatistics()
 
-coint_data_granger = pair_stat.engle_granger_coint(data_a=d2007_aapl, data_b=d2007_mpwr )
-coint_data_johansen = pair_stat.johansen_coint(data_a=d2007_aapl, data_b=d2007_mpwr )
+coint_data_granger = pair_stat.engle_granger_coint(data_a=d2007_aapl, data_b=d2007_mpwr)
 
-data_a = pd.DataFrame(d2007_close_df[coint_data_granger.asset_a])
-data_b = pd.DataFrame(d2007_close_df[coint_data_granger.asset_b])
+print(f'Granger test for cointegration: {coint_data_granger}')
+
+coint_data_johansen_ab = pair_stat.johansen_coint(data_a=d2007_aapl, data_b=d2007_mpwr )
+coint_data_johansen_ba = pair_stat.johansen_coint(data_a=d2007_mpwr, data_b=d2007_aapl )
+
+data_a = pd.DataFrame(d2007_close[coint_data_granger.asset_a])
+data_b = pd.DataFrame(d2007_close[coint_data_granger.asset_b])
 
 stationary_a = pair_stat.stationary_series(data_a=data_a, data_b=data_b, coint_data=coint_data_granger)
 
 stationary_df = pd.DataFrame(stationary_a.flatten())
-stationary_df.index = d2007_close_df.index
+stationary_df.index = d2007_close.index
 stationary_df.plot(grid=True, title=f'stationary time series', figsize=(10, 6))
 stat_mean = stationary_df.mean()[0]
 stat_sd = stationary_df.std()[0]
