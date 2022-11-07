@@ -91,7 +91,6 @@ class PairStatistics:
         key_val = int(interval_key.replace('%','')) if cointegrated else 0
         return cointegrated, key_val
 
-
     def engle_granger_coint(self, data_a: pd.DataFrame, data_b: pd.DataFrame) -> CointData:
         sym_a = data_a.columns[0]
         sym_b = data_b.columns[0]
@@ -124,18 +123,16 @@ class PairStatistics:
 
     def johansen_coint(self, data_a: pd.DataFrame, data_b: pd.DataFrame) -> CointData:
         ts_df = pd.concat([data_a, data_b], axis=1)
-        johansen_rslt_ab = coint_johansen(ts_df, 0, 1)
-        hedge_ab_val = np.abs(johansen_rslt_ab.evec[0, 0] / johansen_rslt_ab.evec[1, 0])
-        hedge_ab = pd.DataFrame([hedge_ab_val])
-        hedge_ab.columns = [data_a.columns[0]]
-        critical_vals_ab = pd.DataFrame(johansen_rslt_ab.trace_stat_crit_vals[0]).transpose()
-        critical_vals_ab.columns = ['10%', '5%', '1%']
-        critical_vals_dict = critical_vals_ab.to_dict('records')[0]
-        trace_stat_ab = johansen_rslt_ab.trace_stat[0]
-        cointegrated, interval = self.find_interval(coint_stat=trace_stat_ab, critical_vals=critical_vals_dict)
+        johansen_rslt = coint_johansen(ts_df, 0, 1)
+        hedge_val = round(np.abs(johansen_rslt.evec[0, 0] / johansen_rslt.evec[1, 0]), 2)
+        critical_vals = pd.DataFrame(johansen_rslt.trace_stat_crit_vals[0]).transpose()
+        critical_vals.columns = ['10%', '5%', '1%']
+        critical_vals_dict = critical_vals.to_dict('records')[0]
+        trace_stat = johansen_rslt.trace_stat[0]
+        cointegrated, interval = self.find_interval(coint_stat=trace_stat, critical_vals=critical_vals_dict)
         sym_a = data_a.columns[0]
         sym_b = data_b.columns[0]
-        coint_data = CointData(cointegrated=cointegrated, confidence=interval, weight=hedge_ab, asset_a=sym_a,
+        coint_data = CointData(cointegrated=cointegrated, confidence=interval, weight=hedge_val, asset_a=sym_a,
                                asset_b=sym_b)
         return coint_data
 
@@ -153,7 +150,7 @@ class PairStatistics:
         theta = result.params
         halflife_f = -np.log(2) / theta
         halflife = round(halflife_f, 0)
-        return halflife
+        return int(halflife)
 
     def stationary_series(self, data_a: pd.DataFrame, data_b: pd.DataFrame, coint_data: CointData) -> np.ndarray:
         """
@@ -166,6 +163,7 @@ class PairStatistics:
         return stationary_a
 
 
+
 trading_days = 252
 s_and_p_data = 's_and_p_data'
 start_date_str = '2007-01-03'
@@ -176,55 +174,61 @@ d2008_start_date: datetime = datetime.fromisoformat(d2008_date_str)
 apple_tuple: Tuple = ('AAPL', 'MPWR')
 market_data = MarketData(start_date=start_date, path=s_and_p_data)
 
-close_prices_df = market_data.get_close_data(list(apple_tuple))
+close_prices_df = market_data.get_close_data(['AAPL', 'MPWR', 'YUM'])
 close_index = close_prices_df.index
 
 half_year = int(trading_days/2)
 
-
 d2007_ix = 0
-d2008_ix = findDateIndex(close_index, d2008_start_date)
 
+d2007_close = pd.DataFrame(close_prices_df[['AAPL', 'MPWR', 'YUM']]).iloc[d2007_ix:d2007_ix+half_year]
 
-d2007_close = pd.DataFrame(close_prices_df[['AAPL', 'MPWR']]).iloc[d2007_ix:d2007_ix+half_year]
-d2008_close = pd.DataFrame(close_prices_df[['AAPL', 'MPWR']]).iloc[d2008_ix:d2008_ix+half_year]
-
-d2007_cor = round(d2007_close.corr().iloc[0,1], 2)
-d2008_cor = round(d2008_close.corr().iloc[0,1], 2)
-cor_df = pd.DataFrame([d2007_cor, d2008_cor])
-cor_df.index = ['2007', '2008']
-cor_df.columns = [f'correlation [{d2007_close.columns[0]},{d2007_close.columns[1]}]']
+d2007_cor = round(d2007_close.corr().iloc[0,[1,2]], 2)
+cor_df = pd.DataFrame([d2007_cor])
+cor_df.index = ['2007']
 
 print()
 print(tabulate(cor_df, headers=[*cor_df.columns], tablefmt='fancy_grid'))
 
 d2007_aapl = pd.DataFrame(d2007_close['AAPL'])
 d2007_mpwr = pd.DataFrame(d2007_close['MPWR'])
+d2007_yum = pd.DataFrame(d2007_close['YUM'])
 
 pair_stat = PairStatistics()
 
-coint_data_granger = pair_stat.engle_granger_coint(data_a=d2007_aapl, data_b=d2007_mpwr)
+coint_data_granger_aapl_mpwr = pair_stat.engle_granger_coint(data_a=d2007_aapl, data_b=d2007_mpwr)
+coint_data_granger_aapl_yum = pair_stat.engle_granger_coint(data_a=d2007_aapl, data_b=d2007_yum)
 
-print(f'Granger test for cointegration: {coint_data_granger}')
+print(f'Granger test for cointegration (AAPL/MPWR): {coint_data_granger_aapl_mpwr}')
+print(f'Granger test for cointegration (AAPL/YUM): {coint_data_granger_aapl_yum}')
 
-coint_data_johansen_ab = pair_stat.johansen_coint(data_a=d2007_aapl, data_b=d2007_mpwr )
-coint_data_johansen_ba = pair_stat.johansen_coint(data_a=d2007_mpwr, data_b=d2007_aapl )
+coint_data_johansen_aapl_mpwr = pair_stat.johansen_coint(data_a=d2007_aapl, data_b=d2007_mpwr )
+coint_data_johansen_aapl_yum = pair_stat.johansen_coint(data_a=d2007_aapl, data_b=d2007_yum )
 
-data_a = pd.DataFrame(d2007_close[coint_data_granger.asset_a])
-data_b = pd.DataFrame(d2007_close[coint_data_granger.asset_b])
+print(f'Johansen test for cointegration (AAPL/MPWR): {coint_data_johansen_aapl_mpwr}')
+print(f'Johansen test for cointegration (AAPL/YUM): {coint_data_johansen_aapl_yum}')
 
-stationary_a = pair_stat.stationary_series(data_a=data_a, data_b=data_b, coint_data=coint_data_granger)
+
+data_a = pd.DataFrame(d2007_close[coint_data_granger_aapl_mpwr.asset_a])
+data_b = pd.DataFrame(d2007_close[coint_data_granger_aapl_mpwr.asset_b])
+
+stationary_a = pair_stat.stationary_series(data_a=data_a, data_b=data_b, coint_data=coint_data_granger_aapl_mpwr)
+
+
 
 stationary_df = pd.DataFrame(stationary_a.flatten())
 stationary_df.index = d2007_close.index
-stationary_df.plot(grid=True, title=f'stationary time series', figsize=(10, 6))
+
+half_life = pair_stat.compute_halflife(stationary_df)
+print(f'half life: {half_life}')
+
+stationary_df.columns = ['Stationary Time Series']
+stationary_df.plot(grid=True, title=f'stationary time series AAPL/MPWR', figsize=(10, 6))
 stat_mean = stationary_df.mean()[0]
 stat_sd = stationary_df.std()[0]
 plt.axhline(y=stat_mean, color='black', linewidth=2)
 plt.axhline(y=stat_mean + stat_sd, color='red', linewidth=1, linestyle='--')
 plt.axhline(y=stat_mean - stat_sd, color='green', linewidth=1, linestyle='--')
 plt.show()
-
-half_life = pair_stat.compute_halflife(stationary_df)
 
 pass
