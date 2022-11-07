@@ -188,6 +188,13 @@
 #
 
 # +
+
+#
+# To generate a python file from the notebook use jupytext:
+# pip install jupytext --upgrade
+# jupytext --to py pairs_trading.ipynb
+#
+
 import os
 from datetime import datetime
 from multiprocessing import Pool
@@ -575,26 +582,6 @@ plot_two_ts(data_a=cor_dist, data_b=spy_close_s, title=f"Number of pairs with a 
 # To the extent that correlation is a predictor for mean reversion, this also suggests that mean reversion statistics may be volatile.
 # </p>
 #
-
-# <h3>
-# Linear Regression and Mean Reversion
-# </h3>
-# <p>
-# The plot below shows the linear regression between AAPL and MPWR in a period where they are highly correlated. The band in the regression
-# plot represents the 95% confidence interval for the regression line.
-# </p>
-
-# +
-# log_pair_df = pd.concat([log_aapl_s, log_mpwr_s], axis=1)
-#
-# # https://seaborn.pydata.org/tutorial/regression.html
-# s = sns.regplot(x=log_pair_df.columns[0], y=log_pair_df.columns[1], data=log_pair_df, scatter_kws={"color": "blue"},
-#                 line_kws={"color": "red"})
-# s.figure.set_size_inches(10, 6)
-# s.set(title=f'Correlation {aapl_mpwr_cor}')
-# plt.show()
-# -
-
 # <p>
 # The histogram below shows the number of pairs with a correlation greater than or equal to 0.75 in the first time period
 # (e.g., start_date to start_date + lookback_window).
@@ -784,7 +771,6 @@ class PairStatistics:
         key_val = int(interval_key.replace('%','')) if cointegrated else 0
         return cointegrated, key_val
 
-
     def engle_granger_coint(self, data_a: pd.DataFrame, data_b: pd.DataFrame) -> CointData:
         sym_a = data_a.columns[0]
         sym_b = data_b.columns[0]
@@ -817,18 +803,16 @@ class PairStatistics:
 
     def johansen_coint(self, data_a: pd.DataFrame, data_b: pd.DataFrame) -> CointData:
         ts_df = pd.concat([data_a, data_b], axis=1)
-        johansen_rslt_ab = coint_johansen(ts_df, 0, 1)
-        hedge_ab_val = np.abs(johansen_rslt_ab.evec[0, 0] / johansen_rslt_ab.evec[1, 0])
-        hedge_ab = pd.DataFrame([hedge_ab_val])
-        hedge_ab.columns = [data_a.columns[0]]
-        critical_vals_ab = pd.DataFrame(johansen_rslt_ab.trace_stat_crit_vals[0]).transpose()
-        critical_vals_ab.columns = ['10%', '5%', '1%']
-        critical_vals_dict = critical_vals_ab.to_dict('records')[0]
-        trace_stat_ab = johansen_rslt_ab.trace_stat[0]
-        cointegrated, interval = self.find_interval(coint_stat=trace_stat_ab, critical_vals=critical_vals_dict)
+        johansen_rslt = coint_johansen(ts_df, 0, 1)
+        hedge_val = round(np.abs(johansen_rslt.evec[0, 0] / johansen_rslt.evec[1, 0]), 2)
+        critical_vals = pd.DataFrame(johansen_rslt.trace_stat_crit_vals[0]).transpose()
+        critical_vals.columns = ['10%', '5%', '1%']
+        critical_vals_dict = critical_vals.to_dict('records')[0]
+        trace_stat = johansen_rslt.trace_stat[0]
+        cointegrated, interval = self.find_interval(coint_stat=trace_stat, critical_vals=critical_vals_dict)
         sym_a = data_a.columns[0]
         sym_b = data_b.columns[0]
-        coint_data = CointData(cointegrated=cointegrated, confidence=interval, weight=hedge_ab, asset_a=sym_a,
+        coint_data = CointData(cointegrated=cointegrated, confidence=interval, weight=hedge_val, asset_a=sym_a,
                                asset_b=sym_b)
         return coint_data
 
@@ -846,7 +830,7 @@ class PairStatistics:
         theta = result.params
         halflife_f = -np.log(2) / theta
         halflife = round(halflife_f, 0)
-        return halflife
+        return int(halflife)
 
     def stationary_series(self, data_a: pd.DataFrame, data_b: pd.DataFrame, coint_data: CointData) -> np.ndarray:
         """
@@ -860,22 +844,19 @@ class PairStatistics:
 
 
 half_year = int(trading_days/2)
-d2008_date_str = '2008-01-03'
-d2008_start_date: datetime = datetime.fromisoformat(d2008_date_str)
 
 close_index = close_prices_df.index
 
 d2007_ix = 0
-d2008_ix = findDateIndex(close_index, d2008_start_date)
 
-d2007_close = pd.DataFrame(close_prices_df[['AAPL', 'MPWR']]).iloc[d2007_ix:d2007_ix+half_year]
-d2008_close = pd.DataFrame(close_prices_df[['AAPL', 'MPWR']]).iloc[d2008_ix:d2008_ix+half_year]
+d2007_close = pd.DataFrame(close_prices_df[['AAPL', 'MPWR', 'YUM']]).iloc[d2007_ix:d2007_ix+half_year]
 
-d2007_cor = round(d2007_close.corr().iloc[0,1], 2)
-d2008_cor = round(d2008_close.corr().iloc[0,1], 2)
-cor_df = pd.DataFrame([d2007_cor, d2008_cor])
-cor_df.index = ['2007', '2008']
-cor_df.columns = [f'correlation [{d2007_close.columns[0]},{d2007_close.columns[1]}]']
+d2007_cor = round(d2007_close.corr().iloc[0,[1,2]], 2)
+cor_df = pd.DataFrame([d2007_cor])
+cor_df.index = ['2007']
+
+print()
+print(tabulate(cor_df, headers=[*cor_df.columns], tablefmt='fancy_grid'))
 
 # -
 
@@ -883,8 +864,8 @@ cor_df.columns = [f'correlation [{d2007_close.columns[0]},{d2007_close.columns[1
 # Example: AAPL/MPWR
 # </h3>
 # <p>
-# AAPL (Apple Inc) and MPWR (Monolithic Power Systems, Inc) are in the technology industry sector.  Their correlation in the
-# first half of 2007 and the first half of 2007 are shown below.
+# AAPL (Apple Inc), MPWR (Monolithic Power Systems, Inc) are in the technology industry sector.  YUM (Yum brands is a food company in a
+# different industry sector). The correlations with AAPL in the first half of 2007 are shown below.
 # </p>
 
 # +
@@ -905,20 +886,25 @@ pair_stat = PairStatistics()
 
 d2007_aapl = pd.DataFrame(d2007_close['AAPL'])
 d2007_mpwr = pd.DataFrame(d2007_close['MPWR'])
-coint_data_granger_2007 = pair_stat.engle_granger_coint(data_a=d2007_aapl, data_b=d2007_mpwr)
+d2007_yum = pd.DataFrame(d2007_close['YUM'])
 
-print(f'Granger test for cointegration: {coint_data_granger_2007}')
+coint_data_granger_aapl_mpwr = pair_stat.engle_granger_coint(data_a=d2007_aapl, data_b=d2007_mpwr)
+print(f'Granger test for cointegration (AAPL/MPWR): {coint_data_granger_aapl_mpwr}')
 
-data_a = pd.DataFrame(d2007_close[coint_data_granger_2007.asset_a])
-data_b = pd.DataFrame(d2007_close[coint_data_granger_2007.asset_b])
+data_a = pd.DataFrame(d2007_close[coint_data_granger_aapl_mpwr.asset_a])
+data_b = pd.DataFrame(d2007_close[coint_data_granger_aapl_mpwr.asset_b])
 
-stationary_a = pair_stat.stationary_series(data_a=data_a, data_b=data_b, coint_data=coint_data_granger_2007)
+stationary_a = pair_stat.stationary_series(data_a=data_a, data_b=data_b, coint_data=coint_data_granger_aapl_mpwr)
 
 stationary_df = pd.DataFrame(stationary_a.flatten())
 stationary_df.index = d2007_close.index
 
 # -
 
+# <p>
+# The condidence level represents the error percent. So 1 = 1% error or 99% confidence, 5 = 5% or 95% confidence and 10 = 10% or
+# 90% confidence.
+# </p>
 # <p>
 # The plot below shows the stationary time series formed by
 # </p>
@@ -932,7 +918,7 @@ stationary_df.index = d2007_close.index
 # +
 
 
-stationary_df.plot(grid=True, title=f'stationary time series, 1st half of 2007', figsize=(10, 6))
+stationary_df.plot(grid=True, title=f'AAPL/MPWR stationary time series, 1st half of 2007', figsize=(10, 6))
 stat_mean = stationary_df.mean()[0]
 stat_sd = stationary_df.std()[0]
 plt.axhline(y=stat_mean, color='black', linewidth=2)
@@ -942,23 +928,42 @@ plt.axhline(y=stat_mean - stat_sd, color='green', linewidth=1, linestyle='--')
 # -
 
 # <p>
-# The correlation between AAPL and MPWR declined from 0.91 to 0.85 (which is still a high correlation). Correlation is a good first filter
-# for cointegrated pairs, but correlation does not guarantee cointegration.
+# AAPL and MPWR are both technology stocks that have related businesses (MPWR's products are used by companies like Apple). We would
+# expect that the two stocks would be cointegrated.
+# </p>
+# <p>
+# In contrast, AAPL and YUM (Yum Brands, a food company) would not be expected to be cointegrated (although they have a surprisingly
+# high correlation). As expected, the Granger test does not show cointegration and mean reversion.
 # </p>
 
-d2008_aapl = pd.DataFrame(d2008_close['AAPL'])
-d2008_mpwr = pd.DataFrame(d2008_close['MPWR'])
-coint_data_granger_2008 = pair_stat.engle_granger_coint(data_a=d2008_aapl, data_b=d2008_mpwr)
-print(f'Granger test for cointegration: {coint_data_granger_2008}')
+coint_data_granger_aapl_yum = pair_stat.engle_granger_coint(data_a=d2007_aapl, data_b=d2007_yum)
+print(f'Granger test for cointegration (AAPL/YUM): {coint_data_granger_aapl_yum}')
 
-coint_data_johansen_2008 = pair_stat.johansen_coint(data_a=d2008_aapl, data_b=d2008_mpwr)
+pairs_list_df = pd.DataFrame(pairs_list)
+pairs_list_df.columns = ['stock_a', 'stock_b', 'sector']
 
-print(f'Johansen test for cointegration: {coint_data_johansen_2008}')
+tech_pairs_ix = pairs_list_df['sector'] == 'information-technology'
+tech_pairs_df = pairs_list_df[tech_pairs_ix]
+tech_stock_set = set(tech_pairs_df['stock_b'].values)
+tech_stock_set = tech_stock_set.union( set(tech_pairs_df['stock_a'].values))
+tech_stock_list = list(tech_stock_set)
+tech_stock_list.sort()
 
-d2008_yum = pd.DataFrame(close_prices_df['YUM']).iloc[d2008_ix:d2008_ix+half_year]
+tech_stock_close = pd.DataFrame(close_prices_df[tech_stock_list]).iloc[d2007_ix:d2007_ix+half_year]
 
-coint_data_johansen_test = pair_stat.johansen_coint(data_a=d2008_aapl, data_b=d2008_yum)
-print(f'Johansen test aapl/yum for cointegration: {coint_data_johansen_test}')
+for index, pair in tech_pairs_df.iterrows():
+    pair_df = pd.DataFrame(pair).transpose()
+    stock_a_s = pair_df['stock_a'].values[0]
+    stock_b_s = pair_df['stock_b'].values[0]
+    stock_a_df = pd.DataFrame(tech_stock_close[stock_a_s])
+    stock_b_df = pd.DataFrame(tech_stock_close[stock_b_s])
+    johansen_rslt = pair_stat.johansen_coint(data_a=stock_a_df, data_b=stock_b_df)
+    if johansen_rslt.cointegrated:
+        print(f'({stock_a_df.columns[0]},{stock_b_df.columns[0]})')
+        granger_rslt = pair_stat.engle_granger_coint(data_a=stock_a_df, data_b=stock_b_df)
+        if granger_rslt.cointegrated:
+            print(granger_rslt)
+
 #
 # <h2>
 # References

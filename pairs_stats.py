@@ -219,9 +219,6 @@ stationary_a = pair_stat.stationary_series(data_a=data_a, data_b=data_b, coint_d
 stationary_df = pd.DataFrame(stationary_a.flatten())
 stationary_df.index = d2007_close.index
 
-half_life = pair_stat.compute_halflife(stationary_df)
-print(f'half life: {half_life}')
-
 stationary_df.columns = ['Stationary Time Series']
 stationary_df.plot(grid=True, title=f'stationary time series AAPL/MPWR', figsize=(10, 6))
 stat_mean = stationary_df.mean()[0]
@@ -230,5 +227,9 @@ plt.axhline(y=stat_mean, color='black', linewidth=2)
 plt.axhline(y=stat_mean + stat_sd, color='red', linewidth=1, linestyle='--')
 plt.axhline(y=stat_mean - stat_sd, color='green', linewidth=1, linestyle='--')
 plt.show()
+
+half_life = pair_stat.compute_halflife(stationary_df)
+print(f'half life: {half_life}')
+
 
 pass
