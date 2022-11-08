@@ -211,11 +211,10 @@ from tabulate import tabulate
 
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
 from statsmodels.tsa.stattools import adfuller
-
-from plot_ts.plot_time_series import plot_ts, plot_two_ts
 #
 # Local libraries
 #
+from plot_ts.plot_time_series import plot_ts, plot_two_ts
 from read_market_data.MarketData import MarketData
 from utils.find_date_index import findDateIndex
 
@@ -745,7 +744,9 @@ class PairStatistics:
         self.decimals = 2
         pass
 
-    def correlation(self, data_a: pd.DataFrame, data_b: pd.DataFrame) -> float:
+    def correlation(self, data_a_df: pd.DataFrame, data_b_df: pd.DataFrame) -> float:
+        data_a = np.array(data_a_df).flatten()
+        data_b = np.array(data_b_df).flatten()
         c = np.corrcoef(data_a, data_b)
         cor_v = round(c[0, 1], 2)
         return cor_v
@@ -832,15 +833,20 @@ class PairStatistics:
         halflife = round(halflife_f, 0)
         return int(halflife)
 
-    def stationary_series(self, data_a: pd.DataFrame, data_b: pd.DataFrame, coint_data: CointData) -> np.ndarray:
+    def stationary_series(self, data_a: pd.DataFrame, data_b: pd.DataFrame, coint_data: CointData) -> pd.DataFrame:
         """
         compute the stationary time series x = A - w * B  or x = A - i - w * B if there is an intercept i
         """
+        data_df = pd.concat([data_a, data_b], axis=1)
+        data_a_df = pd.DataFrame(data_df[coint_data.asset_a])
+        data_b_df = pd.DataFrame(data_df[coint_data.asset_b])
         if coint_data.has_intercept():
-            stationary_a = data_a.values - coint_data.get_intercept() - coint_data.weight * data_b.values
+            stationary_a = data_a_df.values - coint_data.get_intercept() - coint_data.weight * data_b_df.values
         else:
-            stationary_a = data_a.values - coint_data.weight * data_b.values
-        return stationary_a
+            stationary_a = data_a_df.values - coint_data.weight * data_b_df.values
+        stationary_df = pd.DataFrame(stationary_a.flatten())
+        stationary_df.index = data_df.index
+        return stationary_df
 
 
 half_year = int(trading_days/2)
@@ -855,9 +861,6 @@ d2007_cor = round(d2007_close.corr().iloc[0,[1,2]], 2)
 cor_df = pd.DataFrame([d2007_cor])
 cor_df.index = ['2007']
 
-print()
-print(tabulate(cor_df, headers=[*cor_df.columns], tablefmt='fancy_grid'))
-
 # -
 
 # <h3>
@@ -870,6 +873,7 @@ print(tabulate(cor_df, headers=[*cor_df.columns], tablefmt='fancy_grid'))
 
 # +
 
+print()
 print(tabulate(cor_df, headers=[*cor_df.columns], tablefmt='fancy_grid'))
 
 
@@ -891,13 +895,7 @@ d2007_yum = pd.DataFrame(d2007_close['YUM'])
 coint_data_granger_aapl_mpwr = pair_stat.engle_granger_coint(data_a=d2007_aapl, data_b=d2007_mpwr)
 print(f'Granger test for cointegration (AAPL/MPWR): {coint_data_granger_aapl_mpwr}')
 
-data_a = pd.DataFrame(d2007_close[coint_data_granger_aapl_mpwr.asset_a])
-data_b = pd.DataFrame(d2007_close[coint_data_granger_aapl_mpwr.asset_b])
-
-stationary_a = pair_stat.stationary_series(data_a=data_a, data_b=data_b, coint_data=coint_data_granger_aapl_mpwr)
-
-stationary_df = pd.DataFrame(stationary_a.flatten())
-stationary_df.index = d2007_close.index
+stationary_df = pair_stat.stationary_series(data_a=d2007_aapl, data_b=d2007_mpwr, coint_data=coint_data_granger_aapl_mpwr)
 
 # -
 
@@ -917,13 +915,24 @@ stationary_df.index = d2007_close.index
 
 # +
 
+def plot_stationary_ts(stationary_df: pd.DataFrame, plus_delta: float, minus_delta: float, title: str) -> None:
+    stationary_df.plot(grid=True, title=title, figsize=(10, 6))
+    stat_mean = stationary_df.mean()[0]
+    plt.axhline(y=stat_mean, color='black', linewidth=2)
+    plt.axhline(y=stat_mean + plus_delta, color='red', linewidth=1, linestyle='--')
+    plt.axhline(y=stat_mean - minus_delta, color='green', linewidth=1, linestyle='--')
+    plt.show()
 
-stationary_df.plot(grid=True, title=f'AAPL/MPWR stationary time series, 1st half of 2007', figsize=(10, 6))
-stat_mean = stationary_df.mean()[0]
-stat_sd = stationary_df.std()[0]
-plt.axhline(y=stat_mean, color='black', linewidth=2)
-plt.axhline(y=stat_mean + stat_sd, color='red', linewidth=1, linestyle='--')
-plt.axhline(y=stat_mean - stat_sd, color='green', linewidth=1, linestyle='--')
+
+def normalize_df(data_df: pd.DataFrame) -> pd.DataFrame:
+    min_s = data_df.min()
+    max_s = data_df.max()
+    norm_df = (data_df - min_s) / (max_s - min_s)
+    return norm_df
+
+
+std_dev = stationary_df.std()[0]
+plot_stationary_ts(stationary_df=stationary_df, plus_delta=std_dev, minus_delta=std_dev, title='Granger AAPL/MPWR stationary time series, 1st half of 2007' )
 
 # -
 
@@ -939,6 +948,42 @@ plt.axhline(y=stat_mean - stat_sd, color='green', linewidth=1, linestyle='--')
 coint_data_granger_aapl_yum = pair_stat.engle_granger_coint(data_a=d2007_aapl, data_b=d2007_yum)
 print(f'Granger test for cointegration (AAPL/YUM): {coint_data_granger_aapl_yum}')
 
+d2007_gpn = pd.DataFrame(close_prices_df['GPN']).iloc[d2007_ix:d2007_ix+half_year]
+
+cor_df = pd.DataFrame([pair_stat.correlation(data_a_df=d2007_aapl, data_b_df=d2007_gpn)])
+cor_df.index = ['2007']
+cor_df.columns = ['Correlation AAPL/GPN']
+print(tabulate(cor_df, headers=[*cor_df.columns], tablefmt='fancy_grid'))
+
+plot_two_ts(data_a=d2007_aapl, data_b=d2007_gpn, title='Normalized AAPL/GPN first half of 2007',x_label='date', y_label='Normalized Price')
+
+coint_data_granger_aapl_gpn = pair_stat.engle_granger_coint(data_a=d2007_aapl, data_b=d2007_gpn)
+coint_data_johansen_aapl_gpn = pair_stat.johansen_coint(data_a=d2007_aapl, data_b=d2007_gpn)
+
+print(f'Granger test for cointegration (AAPL/GPN)  : {coint_data_granger_aapl_gpn}')
+print(f'Johansen test for cointegration (AAPL/GPN) : {coint_data_johansen_aapl_gpn}')
+
+second_half_start = d2007_ix+half_year
+d2007_aapl_2 = pd.DataFrame(close_prices_df['AAPL']).iloc[second_half_start:second_half_start+half_year]
+d2007_gpn_2 = pd.DataFrame(close_prices_df['GPN']).iloc[second_half_start:second_half_start+half_year]
+d2007_mpwr_2 = pd.DataFrame(close_prices_df['MPWR']).iloc[second_half_start:second_half_start+half_year]
+coint_data_granger_aapl_gpn_2 = pair_stat.engle_granger_coint(data_a=d2007_aapl_2, data_b=d2007_gpn_2)
+coint_data_granger_aapl_mpwr_2 = pair_stat.engle_granger_coint(data_a=d2007_aapl_2, data_b=d2007_mpwr_2)
+
+print(f'Granger test for cointegration (AAPL/GPN): second half of 2007 {coint_data_granger_aapl_gpn_2}')
+print(f'Granger test for cointegration (AAPL/MPWR): second half of 2007 {coint_data_granger_aapl_mpwr_2}')
+
+stationary_df = pair_stat.stationary_series(data_a=d2007_aapl, data_b=d2007_gpn, coint_data=coint_data_granger_aapl_gpn)
+stat_sd = stationary_df.std()[0]
+title='Granger AAPL/GPN stationary time series, 1st half of 2007'
+plot_stationary_ts(stationary_df=stationary_df, plus_delta=stat_sd, minus_delta=stat_sd, title=title)
+
+stationary_df = pair_stat.stationary_series(data_a=d2007_aapl, data_b=d2007_gpn, coint_data=coint_data_johansen_aapl_gpn)
+
+stat_sd = stationary_df.std()[0]
+title='Johansen AAPL/GPN stationary time series, 1st half of 2007'
+plot_stationary_ts(stationary_df=stationary_df, plus_delta=stat_sd, minus_delta=stat_sd, title=title)
+
 pairs_list_df = pd.DataFrame(pairs_list)
 pairs_list_df.columns = ['stock_a', 'stock_b', 'sector']
 
@@ -951,6 +996,11 @@ tech_stock_list.sort()
 
 tech_stock_close = pd.DataFrame(close_prices_df[tech_stock_list]).iloc[d2007_ix:d2007_ix+half_year]
 
+#
+# (AAPL,GPN)
+# cointegrated: True, confidence: 1, weight: 0.56, intercept: 17.52 (GPN, AAPL)
+#
+
 for index, pair in tech_pairs_df.iterrows():
     pair_df = pd.DataFrame(pair).transpose()
     stock_a_s = pair_df['stock_a'].values[0]
@@ -962,7 +1012,7 @@ for index, pair in tech_pairs_df.iterrows():
         print(f'({stock_a_df.columns[0]},{stock_b_df.columns[0]})')
         granger_rslt = pair_stat.engle_granger_coint(data_a=stock_a_df, data_b=stock_b_df)
         if granger_rslt.cointegrated:
-            print(granger_rslt)
+            print(f'granger: {granger_rslt}')
 
 #
 # <h2>
