@@ -211,6 +211,9 @@ from tabulate import tabulate
 
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
 from statsmodels.tsa.stattools import adfuller
+
+import plotly.graph_objects as go
+
 #
 # Local libraries
 #
@@ -327,6 +330,18 @@ pairs_info_df = calc_pair_counts(sectors)
 # </p>
 
 print(tabulate(pairs_info_df, headers=[*pairs_info_df.columns], tablefmt='fancy_grid'))
+
+
+fig = go.Figure(data=[go.Table(
+    header=dict(values=['S&P 500 sector', *pairs_info_df.columns],
+                fill_color='paleturquoise',
+                align='left'),
+    cells=dict(values=[pairs_info_df.index, pairs_info_df['num stocks'], pairs_info_df['num pairs']],
+               fill_color='lavender',
+               align='left'))
+])
+
+fig.show()
 
 
 # <h3>
