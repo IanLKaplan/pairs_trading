@@ -919,6 +919,23 @@ def calc_pair_correlation(stock_close_df: pd.DataFrame, pair: Tuple, window: int
     return cor_s
 
 
+def calc_windowed_correlation(stock_close_df: pd.DataFrame, pairs_list: List[Tuple], window: int) -> np.array:
+    """
+    Calculate the windowed pair correlation over the entire time period, for all the pairs.
+
+    :param stock_close_df: A data frame containing the stock close prices. The columns are the stock tickers.
+    :param pairs_list: A list of the pairs formed from the S&P 500 sectors.
+    :param window: the window over which the correlation is calculated.
+    :return: A numpy array with the correlations.
+    """
+    window = int(window)
+    all_cor_v = np.zeros(0)
+    for pair in pairs_list:
+        cor_v: np.array = calc_pair_correlation(stock_close_df, pair, window)
+        all_cor_v = np.append(all_cor_v, cor_v)
+    return all_cor_v
+
+
 def display_histogram(data_v: np.array, x_label: str, y_label: str) -> None:
     num_bins = int(np.sqrt(data_v.shape[0])) * 4
     fix, ax = plt.subplots(figsize=(10, 8))
@@ -946,24 +963,19 @@ apple_tuple_cor_s = calc_pair_correlation(stock_close_df=close_prices_df, pair=a
 # The windowed correlation is not stable. The plot below shows the correlation between two stocks, AAPL and MPWR, over windowed
 # periods from the start date.
 # </p>
+#
 
 # +
 
 plot_ts(data_s=apple_tuple_cor_s, title=f'correlation between {apple_tuple[0]} and {apple_tuple[1]}',
         x_label='Window Start Date', y_label=f'Correlation over {lookback_window} day window')
+
+
 # -
 
 # <p>
-# Since correlation is not stable, a stock pair that is highly correlated in one time period be uncorrelated (or negatively
+# Since correlation is not stable, a stock pair that is highly correlated in one time period may be uncorrelated (or negatively
 # correlated) in another time period.
-# </p>
-# <p>
-# A brief digression: Adjusted for splits, Apple Inc (AAPL) was about $4.33 per share. Apple is now (2022) one of the most
-# valuable companies in the world. A number of investment funds bought Apple shares and were able to beat the overall market
-# for a number of years. My father invested in such a fund. Every quarter they sent out a news letter on their "market outlook".
-# This was filled with blather to make fund investors think that the people managing the fund has special insight into the
-# stock market. In fact, their only insight was their position in Apple shares. When Apple's share returns plateaued for a time
-# so did the funds returns.
 # </p>
 # <p>
 # Monolithic Power Systems, Inc. (MPWR) stock grew at a rate that was similar to Apple's, although their everall market
@@ -974,68 +986,16 @@ plot_ts(data_s=apple_tuple_cor_s, title=f'correlation between {apple_tuple[0]} a
 # Monolithic Power Systems, Inc. designs and manufactures power management solutions. The Company provides power conversion, LED lighting, load switches, cigarette lighter adapters, chargers, position sensors, analog input, and other electrical components. Monolithic Power Systems serves customers globally.
 # </blockquote>
 # <p>
-# The histogram below shows the aggregate distribution of the pair correlation over all half year time periods.
+# A brief digression: Adjusted for splits, Apple Inc (AAPL) was about $4.33 per share. Apple is now (2022) one of the most
+# valuable companies in the world. A number of investment funds bought Apple shares and were able to beat the overall market
+# for the years when Apple has exceptional growth. My father invested in such a fund. Every quarter they sent out a "market outlook"
+# new letter. This was filled with blather to make fund investors think that the people managing the fund had special insight into the
+# stock market (which justified the fees the fund charged). In fact, their only insight was their position in Apple stock.
+# When Apple's share price plateaued, so did the funds returns.
 # </p>
 #
 
 # +
-
-
-
-
-# -
-
-# <p>
-# The pairs are selected from a common S&P industry sector, so there are a significant number of pairs that
-# have a correlation above 0.75.
-# </p>
-# <p>
-# There are a small number of pairs that have a strong negative correlation (a negative correlation -0.75 to approximately -0.9).
-# Initially we look at pairs that have a strong positive correlation, but it may be unwise to ignore the negative correlations as
-# well.
-# </p>
-
-# +
-
-
-
-# -
-
-#
-# <p>
-# The plot below shows the number of pairs, in a half year time period period, with a correlation above a particular cutoff.
-# </p>
-#
-
-# +
-
-
-# -
-
-#
-# <p>
-# In the plot above, about 75% of the pairs are highly correlated around 2008. The corresponds to the 2008-2009 stock market crash
-# caused by the financial crisis. This lends validity to the financial market maxim that in a market crash all assets become correlated.
-# </p>
-# <p>
-# To the extent that correlation is a predictor for mean reversion, this also suggests that mean reversion statistics may be volatile.
-# </p>
-# <h3>
-# Stability of Correlation
-# </h3>
-# <p>
-# In this section I look at whether a strong correlation between pairs makes it likely that there will be a strong correlation in
-# the next time period. This is an interesting statistics because correlation is related to cointegration. If correlation persists
-# between periods then cointegration and mean reversion are likely to persist.
-# </p>
-#
-
-# +
-#
-# A problem with Jupyter notebooks, especially large notebooks like this one is lack of locality.  To review:
-# pairs_list - a list of all of the pairs, including sector information.
-#
-
 class SerialCorrResult:
     def __init__(self, pair: Tuple, corr_df: pd.DataFrame):
         self.pair: Tuple = pair
@@ -1116,12 +1076,38 @@ def calc_corr_dist(corr_df: pd.DataFrame, cut_off: float) -> pd.DataFrame:
     return count_df
 
 
-correlation_cutoff = 0.75
 corr_df = build_corr_frame(corr_obj_list)
 cor_a = np.array(corr_df.values).ravel()
 
+# -
+
+# <p>
+# The histogram below shows the aggregate distribution of the pair correlation over all half year time periods.
+# </p>
+
+# +
+
+
 display_histogram(cor_a, 'Correlation between pairs', 'Count')
 
+# -
+
+# <p>
+# The pairs are selected from a common S&P industry sector, so there are a significant number of pairs that
+# have a correlation above 0.75.
+# </p>
+# <p>
+# There are a small number of pairs that have a strong negative correlation (a negative correlation -0.75 to approximately -0.9).
+# Initially we look at pairs that have a strong positive correlation, but it may be unwise to ignore the negative correlations as
+# well.
+# </p>
+# <p>
+# The plot below shows the number of pairs, in a half year time period period, with a correlation above a particular cutoff.
+# </p>
+
+# +
+
+correlation_cutoff = 0.75
 cor_dist_df = calc_corr_dist(corr_df, correlation_cutoff)
 
 
@@ -1129,16 +1115,48 @@ spy_close_df = market_data.read_data('SPY')
 spy_close_s = spy_close_df[spy_close_df.columns[0]]
 spy_close_s.columns = spy_close_df.columns
 cor_dist_df.columns = ['Correlation']
+
+
 plot_two_ts(data_a=cor_dist_df, data_b=spy_close_s, title=f"Number of pairs with a correlation >= {correlation_cutoff}, by time period and SPY",
             x_label='Window Start Date', y_label=f'Number of pairs in the {lookback_window} day window')
 
 
-# The variable you want to predict is called the dependent variable. The variable you are using to predict the
-# other variable's value is called the independent variable.
-
-
-
 # -
+
+# <p>
+# In the plot above, about 75% of the pairs are highly correlated around 2008. The corresponds to the 2008-2009 stock market crash
+# caused by the financial crisis. This lends validity to the financial market maxim that in a market crash all assets become correlated.
+# </p>
+# <p>
+# To the extent that correlation is a predictor for mean reversion, this also suggests that mean reversion statistics may be volatile.
+# </p>
+
+# <h3>
+# Stability of Correlation
+# </h3>
+# <p>
+# In this section I look at whether a strong correlation between pairs makes it likely that there will be a strong correlation in
+# the next time period. This is an interesting statistics because correlation is related to cointegration. If correlation persists
+# between periods then cointegration and mean reversion are likely to persist. If correlation does not persist between time periods
+# then cointegration may not be persistent.
+# </p>
+#
+
+def calc_corr_dependence(corr_df: pd.DataFrame, cutoff_first: float, cutoff_second: float ) -> Tuple:
+    corr_m = np.array(corr_df.values)
+    no_depend = 0
+    has_depend = 0
+    for col_ix in range(corr_m.shape[1]):
+        for row_ix in range(corr_m.shape[0]-1):
+            if corr_m[row_ix, col_ix] >= cutoff_first:
+                if corr_m[row_ix+1,col_ix] >= cutoff_second:
+                    has_depend = has_depend + 1
+                else:
+                    no_depend = no_depend + 1
+    return (no_depend, has_depend)
+
+
+no_depend, has_depend = calc_corr_dependence(corr_df, correlation_cutoff, correlation_cutoff - 0.10)
 
 #
 # <h2>
