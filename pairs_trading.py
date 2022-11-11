@@ -919,23 +919,6 @@ def calc_pair_correlation(stock_close_df: pd.DataFrame, pair: Tuple, window: int
     return cor_s
 
 
-def calc_windowed_correlation(stock_close_df: pd.DataFrame, pairs_list: List[Tuple], window: int) -> np.array:
-    """
-    Calculate the windowed pair correlation over the entire time period, for all the pairs.
-
-    :param stock_close_df: A data frame containing the stock close prices. The columns are the stock tickers.
-    :param pairs_list: A list of the pairs formed from the S&P 500 sectors.
-    :param window: the window over which the correlation is calculated.
-    :return: A numpy array with the correlations.
-    """
-    window = int(window)
-    all_cor_v = np.zeros(0)
-    for pair in pairs_list:
-        cor_v: np.array = calc_pair_correlation(stock_close_df, pair, window)
-        all_cor_v = np.append(all_cor_v, cor_v)
-    return all_cor_v
-
-
 def display_histogram(data_v: np.array, x_label: str, y_label: str) -> None:
     num_bins = int(np.sqrt(data_v.shape[0])) * 4
     fix, ax = plt.subplots(figsize=(10, 8))
@@ -998,10 +981,6 @@ plot_ts(data_s=apple_tuple_cor_s, title=f'correlation between {apple_tuple[0]} a
 # +
 
 
-pairs_list = get_pairs(sectors)
-
-cor_a = calc_windowed_correlation(close_prices_df, pairs_list, lookback_window)
-display_histogram(cor_a, 'Correlation between pairs', 'Count')
 
 
 # -
@@ -1018,48 +997,8 @@ display_histogram(cor_a, 'Correlation between pairs', 'Count')
 
 # +
 
-class WindowedCorrelationDist:
-    """
-    Calculate the pairs correlation by time period
-    """
-    def __init__(self,
-                 stock_close_df: pd.DataFrame,
-                 pairs_list: List[Tuple],
-                 window: int,
-                 cutoff: float):
-        self.stock_close_df = stock_close_df
-        self.window = window
-        self.cutoff = cutoff
-        self.pairs_list = pairs_list
-
-    def window_correlation(self, start_ix: int) -> int:
-        count = 0
-        for pair in self.pairs_list:
-            stock_a = pair[0]
-            stock_b = pair[1]
-            price_a = self.stock_close_df[stock_a].iloc[start_ix:start_ix + self.window]
-            price_b = self.stock_close_df[stock_b].iloc[start_ix:start_ix + self.window]
-            log_price_a = log(price_a)
-            log_price_b = log(price_b)
-            c = np.corrcoef(log_price_a, log_price_b)
-            if c[0, 1] >= self.cutoff:
-                count = count + 1
-        return count
-
-    def calc_correlation_dist(self) -> pd.Series:
-        start_list = [ix for ix in range(0, self.stock_close_df.shape[0], self.window)]
-        with Pool() as mp_pool:
-            count_l = mp_pool.map(self.window_correlation, start_list)
-        dist_s = pd.Series(count_l)
-        index = self.stock_close_df.index
-        dist_s.index = index[start_list]
-        return dist_s
 
 
-correlation_cutoff = 0.75
-cor_dist_obj = WindowedCorrelationDist(stock_close_df=close_prices_df, pairs_list=pairs_list, window=lookback_window,
-                                       cutoff=correlation_cutoff)
-cor_dist = cor_dist_obj.calc_correlation_dist()
 # -
 
 #
@@ -1070,12 +1009,7 @@ cor_dist = cor_dist_obj.calc_correlation_dist()
 
 # +
 
-spy_close_df = market_data.read_data('SPY')
-spy_close_s = spy_close_df[spy_close_df.columns[0]]
-spy_close_s.columns = spy_close_df.columns
-cor_dist.columns = ['Correlation']
-plot_two_ts(data_a=cor_dist, data_b=spy_close_s, title=f"Number of pairs with a correlation >= {correlation_cutoff}, by time period and SPY",
-        x_label='Window Start Date', y_label=f'Number of pairs in the {lookback_window} day window')
+
 # -
 
 #
@@ -1103,17 +1037,17 @@ plot_two_ts(data_a=cor_dist, data_b=spy_close_s, title=f"Number of pairs with a 
 #
 
 class SerialCorrResult:
-    def __init__(self, pair: Tuple, corr_list: List[float]):
-        self.pair_list = pair
-        self.corr_list = corr_list
+    def __init__(self, pair: Tuple, corr_df: pd.DataFrame):
+        self.pair: Tuple = pair
+        self.corr_df: pd.DataFrame = corr_df
 
 
 class SerialCorrelation:
-    def __init__(self, stock_close_df: pd.DataFrame, pairs_list: List[Tuple], cutoff: float, window: int):
+    def __init__(self, stock_close_df: pd.DataFrame, pairs_list: List[Tuple], window: int):
         self.stock_close_df = stock_close_df
         self.pairs_list = pairs_list
-        self.cutoff = cutoff
         self.window = window
+        self.index = self.stock_close_df.index
 
     def calc_pair_serial_correlation(self, pair) -> SerialCorrResult:
         stock_a_sym = pair[0]
@@ -1121,42 +1055,88 @@ class SerialCorrelation:
         stock_a_df = self.stock_close_df[stock_a_sym]
         stock_b_df = self.stock_close_df[stock_b_sym]
         corr_list = list()
+        date_list = list()
         for ix in range(0, self.stock_close_df.shape[0], self.window):
             stock_a_win = log(stock_a_df.iloc[ix:ix + self.window])
             stock_b_win = log(stock_b_df.iloc[ix:ix + self.window])
             c = np.corrcoef(stock_a_win, stock_b_win)
             corr =  round(c[0, 1], 2)
             corr_list.append(corr)
-        serial_corr_result = SerialCorrResult(pair, corr_list)
+            date_list.append(self.index[ix])
+        corr_df = pd.DataFrame(corr_list)
+        corr_df.index = date_list
+        serial_corr_result = SerialCorrResult(pair, corr_df)
         return serial_corr_result
 
     def serial_correlation(self) -> List[SerialCorrResult]:
+        # serial_corr_list = list()
         # for pair in self.pairs_list:
         #     serial_corr = self.calc_pair_serial_correlation(pair)
         #     serial_corr_list.append(serial_corr)
-        with Pool as mp_pool:
+        with Pool() as mp_pool:
             serial_corr_list = mp_pool.map(self.calc_pair_serial_correlation, self.pairs_list)
         return serial_corr_list
 
 
-serial_correlation = SerialCorrelation(close_prices_df, pairs_list, correlation_cutoff, half_year)
+pairs_list = get_pairs(sectors)
+
+serial_correlation = SerialCorrelation(close_prices_df, pairs_list, half_year)
 corr_obj_list = serial_correlation.serial_correlation()
+
+def build_corr_frame_old(corr_obj_list: List[SerialCorrResult]) -> pd.DataFrame:
+    corr_df = pd.DataFrame()
+    for corr_obj in corr_obj_list:
+        corr_df = pd.concat([corr_df, corr_obj.corr_df], axis=1)
+    return corr_df
+
+def build_corr_frame(corr_obj_list: List[SerialCorrResult]) -> pd.DataFrame:
+    num_cols = len(corr_obj_list)
+    num_rows = corr_obj_list[0].corr_df.shape[0]
+    corr_m = np.zeros([num_rows, num_cols])
+    for col_ix in range(num_cols):
+        corr_df = corr_obj_list[col_ix].corr_df
+        for row_ix in range(num_rows):
+            corr_m[row_ix, col_ix] = corr_df.iloc[row_ix]
+    corr_df = pd.DataFrame(corr_m)
+    corr_df.index = corr_obj_list[0].corr_df.index
+    return corr_df
+
+
+
+def calc_corr_dist(corr_df: pd.DataFrame, cut_off: float) -> pd.DataFrame:
+    count_list = list()
+    for row_num, row in corr_df.iterrows():
+        count = 0
+        for val in row:
+            if val >= cut_off:
+                count = count + 1
+        count_list.append(count)
+    count_df = pd.DataFrame(count_list)
+    count_df.index = corr_df.index
+    return count_df
+
+
+correlation_cutoff = 0.75
+corr_df = build_corr_frame(corr_obj_list)
+cor_a = np.array(corr_df.values).ravel()
+
+display_histogram(cor_a, 'Correlation between pairs', 'Count')
+
+cor_dist_df = calc_corr_dist(corr_df, correlation_cutoff)
+
+
+spy_close_df = market_data.read_data('SPY')
+spy_close_s = spy_close_df[spy_close_df.columns[0]]
+spy_close_s.columns = spy_close_df.columns
+cor_dist_df.columns = ['Correlation']
+plot_two_ts(data_a=cor_dist_df, data_b=spy_close_s, title=f"Number of pairs with a correlation >= {correlation_cutoff}, by time period and SPY",
+            x_label='Window Start Date', y_label=f'Number of pairs in the {lookback_window} day window')
+
 
 # The variable you want to predict is called the dependent variable. The variable you are using to predict the
 # other variable's value is called the independent variable.
 
-independent_var = np.zeros(0)
-dependent_var = np.zeros(0)
-for corr_obj in corr_obj_list:
-    corr_list = corr_obj.corr_list
-    n = len(corr_list)
-    ind_a = np.array(corr_list[0:n-1])
-    dep_a = np.array(corr_list[1:n])
-    independent_var = np.concatenate([independent_var, ind_a])
-    dependent_var = np.concatenate([dependent_var, dep_a])
 
-
-pass
 
 # -
 
