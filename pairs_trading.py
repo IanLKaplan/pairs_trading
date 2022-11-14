@@ -888,54 +888,6 @@ def get_pairs(sector_info: dict) -> List[Tuple]:
     return pairs_list
 
 
-def calc_pair_correlation(stock_close_df: pd.DataFrame, pair: Tuple, window: int) -> pd.Series:
-    """
-    Calculate the windowed correlations for a stock pair over the entire data set.
-    :param stock_close_df: A data frame containing the stock close prices
-    :param pair: the stock pair (e.g., a Tuple consisting of two strings for the stock symbols)
-    :param window: The data window
-    :return: a numpy array of windowed correlations for the pair over the entire time period.
-    """
-    window = int(window)
-    cor_v = np.zeros(0)
-    stock_a = pair[0]
-    stock_b = pair[1]
-    a_close = stock_close_df[stock_a]
-    b_close = stock_close_df[stock_b]
-    a_log_close = log(a_close)
-    b_log_close = log(b_close)
-
-    index = stock_close_df.index
-    date_l: List = []
-    assert len(a_log_close) == len(b_log_close)
-    for i in range(0, len(a_log_close), window):
-        sec_a = a_log_close[i:i + window]
-        sec_b = b_log_close[i:i + window]
-        c = np.corrcoef(sec_a, sec_b)
-        cor_v = np.append(cor_v, c[0, 1])
-        date_l.append(index[i])
-    cor_s: pd.Series = pd.Series(cor_v)
-    cor_s.index = date_l
-    return cor_s
-
-
-def calc_windowed_correlation(stock_close_df: pd.DataFrame, pairs_list: List[Tuple], window: int) -> np.array:
-    """
-    Calculate the windowed pair correlation over the entire time period, for all the pairs.
-
-    :param stock_close_df: A data frame containing the stock close prices. The columns are the stock tickers.
-    :param pairs_list: A list of the pairs formed from the S&P 500 sectors.
-    :param window: the window over which the correlation is calculated.
-    :return: A numpy array with the correlations.
-    """
-    window = int(window)
-    all_cor_v = np.zeros(0)
-    for pair in pairs_list:
-        cor_v: np.array = calc_pair_correlation(stock_close_df, pair, window)
-        all_cor_v = np.append(all_cor_v, cor_v)
-    return all_cor_v
-
-
 def display_histogram(data_v: np.array, x_label: str, y_label: str) -> None:
     num_bins = int(np.sqrt(data_v.shape[0])) * 4
     fix, ax = plt.subplots(figsize=(10, 8))
@@ -945,10 +897,77 @@ def display_histogram(data_v: np.array, x_label: str, y_label: str) -> None:
     ax.hist(data_v, bins=num_bins, color="blue", ec="blue")
     plt.show()
 
-lookback_window = int(trading_days / 2)
-apple_tuple: Tuple = ('AAPL', 'MPWR')
-apple_tuple_cor_s = calc_pair_correlation(stock_close_df=close_prices_df, pair=apple_tuple, window=lookback_window)
 
+
+# +
+
+class SerialCorrelation:
+    class SerialCorrResult:
+        def __init__(self, pair: Tuple, corr_df: pd.DataFrame):
+            self.pair: Tuple = pair
+            self.corr_df: pd.DataFrame = corr_df
+
+    def __init__(self, stock_close_df: pd.DataFrame, pairs_list: List[Tuple], window: int):
+        self.stock_close_df = stock_close_df
+        self.pairs_list = pairs_list
+        self.window = window
+        self.index = self.stock_close_df.index
+
+    def calc_pair_serial_correlation(self, pair) -> SerialCorrResult:
+        stock_a_sym = pair[0]
+        stock_b_sym = pair[1]
+        stock_a_df = self.stock_close_df[stock_a_sym]
+        stock_b_df = self.stock_close_df[stock_b_sym]
+        corr_list = list()
+        date_list = list()
+        for ix in range(0, self.stock_close_df.shape[0], self.window):
+            stock_a_win = log(stock_a_df.iloc[ix:ix + self.window])
+            stock_b_win = log(stock_b_df.iloc[ix:ix + self.window])
+            c = np.corrcoef(stock_a_win, stock_b_win)
+            corr =  round(c[0, 1], 2)
+            corr_list.append(corr)
+            date_list.append(self.index[ix])
+        corr_df = pd.DataFrame(corr_list)
+        corr_df.index = date_list
+        serial_corr_result = self.SerialCorrResult(pair, corr_df)
+        return serial_corr_result
+
+    def build_corr_frame(self, corr_list: List[SerialCorrResult]) -> pd.DataFrame:
+        num_cols = len(corr_list)
+        num_rows = corr_list[0].corr_df.shape[0]
+        corr_m = np.zeros([num_rows, num_cols])
+        col_names = list()
+        for col_ix in range(num_cols):
+            pair = corr_list[col_ix].pair
+            col = f'{pair[0]},{pair[1]}'
+            col_names.append(col)
+            corr_df = corr_list[col_ix].corr_df
+            for row_ix in range(num_rows):
+                corr_m[row_ix, col_ix] = corr_df.iloc[row_ix]
+        corr_df = pd.DataFrame(corr_m)
+        corr_df.columns = col_names
+        corr_df.index = corr_list[0].corr_df.index
+        return corr_df
+
+
+    def serial_correlation(self) -> pd.DataFrame:
+        # serial_corr_list = list()
+        # for pair in self.pairs_list:
+        #     serial_corr = self.calc_pair_serial_correlation(pair)
+        #     serial_corr_list.append(serial_corr)
+        with Pool() as mp_pool:
+            serial_corr_list = mp_pool.map(self.calc_pair_serial_correlation, self.pairs_list)
+        corr_df = self.build_corr_frame(serial_corr_list)
+        return corr_df
+
+
+pairs_list = get_pairs(sectors)
+
+serial_correlation = SerialCorrelation(close_prices_df, pairs_list, half_year)
+
+apple_tuple: Tuple = ('AAPL', 'MPWR')
+apple_corr_result: SerialCorrelation.SerialCorrResult = serial_correlation.calc_pair_serial_correlation(apple_tuple)
+apple_corr_df = apple_corr_result.corr_df
 
 # -
 
@@ -963,13 +982,12 @@ apple_tuple_cor_s = calc_pair_correlation(stock_close_df=close_prices_df, pair=a
 # The windowed correlation is not stable. The plot below shows the correlation between two stocks, AAPL and MPWR, over windowed
 # periods from the start date.
 # </p>
-#
 
 # +
 
-plot_ts(data_s=apple_tuple_cor_s, title=f'correlation between {apple_tuple[0]} and {apple_tuple[1]}',
-        x_label='Window Start Date', y_label=f'Correlation over {lookback_window} day window')
 
+plot_ts(data_s=apple_corr_df[0], title=f'correlation between {apple_tuple[0]} and {apple_tuple[1]}',
+        x_label='Window Start Date', y_label=f'Correlation over {half_year} day window')
 
 # -
 
@@ -993,74 +1011,11 @@ plot_ts(data_s=apple_tuple_cor_s, title=f'correlation between {apple_tuple[0]} a
 # stock market (which justified the fees the fund charged). In fact, their only insight was their position in Apple stock.
 # When Apple's share price plateaued, so did the funds returns.
 # </p>
-#
 
 # +
-class SerialCorrResult:
-    def __init__(self, pair: Tuple, corr_df: pd.DataFrame):
-        self.pair: Tuple = pair
-        self.corr_df: pd.DataFrame = corr_df
 
 
-class SerialCorrelation:
-    def __init__(self, stock_close_df: pd.DataFrame, pairs_list: List[Tuple], window: int):
-        self.stock_close_df = stock_close_df
-        self.pairs_list = pairs_list
-        self.window = window
-        self.index = self.stock_close_df.index
-
-    def calc_pair_serial_correlation(self, pair) -> SerialCorrResult:
-        stock_a_sym = pair[0]
-        stock_b_sym = pair[1]
-        stock_a_df = self.stock_close_df[stock_a_sym]
-        stock_b_df = self.stock_close_df[stock_b_sym]
-        corr_list = list()
-        date_list = list()
-        for ix in range(0, self.stock_close_df.shape[0], self.window):
-            stock_a_win = log(stock_a_df.iloc[ix:ix + self.window])
-            stock_b_win = log(stock_b_df.iloc[ix:ix + self.window])
-            c = np.corrcoef(stock_a_win, stock_b_win)
-            corr =  round(c[0, 1], 2)
-            corr_list.append(corr)
-            date_list.append(self.index[ix])
-        corr_df = pd.DataFrame(corr_list)
-        corr_df.index = date_list
-        serial_corr_result = SerialCorrResult(pair, corr_df)
-        return serial_corr_result
-
-    def serial_correlation(self) -> List[SerialCorrResult]:
-        # serial_corr_list = list()
-        # for pair in self.pairs_list:
-        #     serial_corr = self.calc_pair_serial_correlation(pair)
-        #     serial_corr_list.append(serial_corr)
-        with Pool() as mp_pool:
-            serial_corr_list = mp_pool.map(self.calc_pair_serial_correlation, self.pairs_list)
-        return serial_corr_list
-
-
-pairs_list = get_pairs(sectors)
-
-serial_correlation = SerialCorrelation(close_prices_df, pairs_list, half_year)
-corr_obj_list = serial_correlation.serial_correlation()
-
-
-def build_corr_frame(corr_obj_list: List[SerialCorrResult]) -> pd.DataFrame:
-    num_cols = len(corr_obj_list)
-    num_rows = corr_obj_list[0].corr_df.shape[0]
-    corr_m = np.zeros([num_rows, num_cols])
-    col_names = list()
-    for col_ix in range(num_cols):
-        pair = corr_obj_list[col_ix].pair
-        col = f'{pair[0]},{pair[1]}'
-        col_names.append(col)
-        corr_df = corr_obj_list[col_ix].corr_df
-        for row_ix in range(num_rows):
-            corr_m[row_ix, col_ix] = corr_df.iloc[row_ix]
-    corr_df = pd.DataFrame(corr_m)
-    corr_df.columns = col_names
-    corr_df.index = corr_obj_list[0].corr_df.index
-    return corr_df
-
+corr_df = serial_correlation.serial_correlation()
 
 
 def calc_corr_dist(corr_df: pd.DataFrame, cut_off: float) -> pd.DataFrame:
@@ -1076,7 +1031,6 @@ def calc_corr_dist(corr_df: pd.DataFrame, cut_off: float) -> pd.DataFrame:
     return count_df
 
 
-corr_df = build_corr_frame(corr_obj_list)
 cor_a = np.array(corr_df.values).ravel()
 
 # -
@@ -1112,13 +1066,12 @@ cor_dist_df = calc_corr_dist(corr_df, correlation_cutoff)
 
 
 spy_close_df = market_data.read_data('SPY')
-spy_close_s = spy_close_df[spy_close_df.columns[0]]
-spy_close_s.columns = spy_close_df.columns
+spy_close_df = pd.DataFrame(spy_close_df[spy_close_df.columns[0]])
 cor_dist_df.columns = ['Correlation']
 
 
-plot_two_ts(data_a=cor_dist_df, data_b=spy_close_s, title=f"Number of pairs with a correlation >= {correlation_cutoff}, by time period and SPY",
-            x_label='Window Start Date', y_label=f'Number of pairs in the {lookback_window} day window')
+plot_two_ts(data_a=cor_dist_df, data_b=spy_close_df, title=f"Number of pairs with a correlation >= {correlation_cutoff}, by time period and SPY",
+            x_label='Window Start Date', y_label=f'Number of pairs in the {half_year} day window')
 
 
 # -
@@ -1135,27 +1088,30 @@ plot_two_ts(data_a=cor_dist_df, data_b=spy_close_s, title=f"Number of pairs with
 # Stability of Correlation
 # </h3>
 # <p>
+# For pairs trading to be a profitable strategy the statistics that are observed over a past period must persists into a future period.
+# If a pairs forms a stationary mean reverting time series in a past period, profitable pairs trading relies on this statistics holding
+# over the out-of-sample trading period.
+# </p>
+# <p>
 # In this section I look at whether a strong correlation between pairs makes it likely that there will be a strong correlation in
-# the next time period. This is an interesting statistics because correlation is related to cointegration. If correlation persists
-# between periods then cointegration and mean reversion are likely to persist. If correlation does not persist between time periods
+# the next time period. This is an important statistic for pairs trading because correlation is related to cointegration. If correlation persists
+# between periods then cointegration and mean reversion are more likely to persist. If correlation does not persist between time periods
 # then cointegration may not be persistent.
 # </p>
-#
 
-class StatDependence:
-
-    def calc_corr_dependence(corr_df: pd.DataFrame, cutoff_first: float, cutoff_second: float ) -> Tuple:
-        corr_m = np.array(corr_df.values)
-        no_depend = 0
-        has_depend = 0
-        for col_ix in range(corr_m.shape[1]):
-            for row_ix in range(corr_m.shape[0]-1):
-                if corr_m[row_ix, col_ix] >= cutoff_first:
-                    if corr_m[row_ix+1,col_ix] >= cutoff_second:
-                        has_depend = has_depend + 1
-                    else:
-                        no_depend = no_depend + 1
-        return (no_depend, has_depend)
+# +
+def calc_corr_dependence(corr_df: pd.DataFrame, cutoff_first: float, cutoff_second: float ) -> Tuple:
+    corr_m = np.array(corr_df.values)
+    no_depend = 0
+    has_depend = 0
+    for col_ix in range(corr_m.shape[1]):
+        for row_ix in range(corr_m.shape[0]-1):
+            if corr_m[row_ix, col_ix] >= cutoff_first:
+                if corr_m[row_ix+1,col_ix] >= cutoff_second:
+                    has_depend = has_depend + 1
+                else:
+                    no_depend = no_depend + 1
+    return (no_depend, has_depend)
 
 
 no_depend, has_depend = calc_corr_dependence(corr_df, correlation_cutoff, correlation_cutoff - 0.10)
@@ -1165,12 +1121,22 @@ depend_df = round(depend_df / depend_df.sum(), 2) * 100
 depend_df = depend_df.transpose()
 depend_df.columns = ['Dependence', 'No Dependence']
 depend_df.index = ['Correlation Dependence (percent)']
+
+# -
+
+# <p>
+# The table below shows the dependence between correlation in the past period and correlation in the next period. The correlation is the
+# past period is at least 0.75. The correlation in the next period is at least 0.60.
+# </p>
+
+# +
+
+
 print(tabulate(depend_df, headers=[*depend_df.columns], tablefmt='fancy_grid'))
 
+# -
 
-
-
-pass
+#
 
 #
 # <h2>

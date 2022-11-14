@@ -15,7 +15,7 @@ def plot_ts(data_s: pd.Series, title: str, x_label: str, y_label: str) -> None:
     plt.show()
 
 
-def plot_two_ts(data_a: pd.Series, data_b: pd.Series, title: str, x_label: str, y_label: str) -> None:
+def plot_two_ts(data_a: pd.DataFrame, data_b: pd.DataFrame, title: str, x_label: str, y_label: str) -> None:
     color_a = 'blue'
     color_b = 'green'
     fig, ax = plt.subplots(figsize=(10, 8))
