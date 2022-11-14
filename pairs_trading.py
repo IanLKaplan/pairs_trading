@@ -1099,22 +1099,37 @@ plot_two_ts(data_a=cor_dist_df, data_b=spy_close_df, title=f"Number of pairs wit
 # then cointegration may not be persistent.
 # </p>
 
-# +
-def calc_corr_dependence(corr_df: pd.DataFrame, cutoff_first: float, cutoff_second: float ) -> Tuple:
-    corr_m = np.array(corr_df.values)
-    no_depend = 0
-    has_depend = 0
-    for col_ix in range(corr_m.shape[1]):
-        for row_ix in range(corr_m.shape[0]-1):
-            if corr_m[row_ix, col_ix] >= cutoff_first:
-                if corr_m[row_ix+1,col_ix] >= cutoff_second:
-                    has_depend = has_depend + 1
-                else:
-                    no_depend = no_depend + 1
-    return (no_depend, has_depend)
+class CalcDependence:
+    """
+    A class that packages code that calculates dependence.
+    """
+    @staticmethod
+    def calc_corr_dependence(corr_df: pd.DataFrame, cutoff_first: float, cutoff_second: float ) -> Tuple:
+        corr_m = np.array(corr_df.values)
+        no_depend = 0
+        has_depend = 0
+        for col_ix in range(corr_m.shape[1]):
+            for row_ix in range(corr_m.shape[0]-1):
+                if corr_m[row_ix, col_ix] >= cutoff_first:
+                    if corr_m[row_ix+1,col_ix] >= cutoff_second:
+                        has_depend = has_depend + 1
+                    else:
+                        no_depend = no_depend + 1
+        return (no_depend, has_depend)
+
+    @staticmethod
+    def calc_coint_dependence(corr_df: pd.DataFrame, close_prices_df: pd.DataFrame, cutoff: float, window: int):
+        window_start = 0
+        for ix_date, row in corr_df.iterrows():
+            for ix in range(corr_df.shape[1]):
+                if row[ix] > cutoff:
+                    pair_l = row.index[ix].split(',')
+            window_start = window_start + window
+            pass
 
 
-no_depend, has_depend = calc_corr_dependence(corr_df, correlation_cutoff, correlation_cutoff - 0.10)
+
+no_depend, has_depend = CalcDependence.calc_corr_dependence(corr_df, correlation_cutoff, correlation_cutoff - 0.10)
 
 depend_df = pd.DataFrame([has_depend, no_depend])
 depend_df = round(depend_df / depend_df.sum(), 2) * 100
@@ -1133,6 +1148,8 @@ depend_df.index = ['Correlation Dependence (percent)']
 
 
 print(tabulate(depend_df, headers=[*depend_df.columns], tablefmt='fancy_grid'))
+
+CalcDependence.calc_coint_dependence(corr_df=corr_df, close_prices_df=close_prices_df, cutoff=correlation_cutoff, window=half_year)
 
 # -
 
