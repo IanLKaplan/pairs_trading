@@ -1043,21 +1043,21 @@ pairs_list = get_pairs(sectors)
 serial_correlation = SerialCorrelation(close_prices_df, pairs_list, half_year)
 corr_obj_list = serial_correlation.serial_correlation()
 
-def build_corr_frame_old(corr_obj_list: List[SerialCorrResult]) -> pd.DataFrame:
-    corr_df = pd.DataFrame()
-    for corr_obj in corr_obj_list:
-        corr_df = pd.concat([corr_df, corr_obj.corr_df], axis=1)
-    return corr_df
 
 def build_corr_frame(corr_obj_list: List[SerialCorrResult]) -> pd.DataFrame:
     num_cols = len(corr_obj_list)
     num_rows = corr_obj_list[0].corr_df.shape[0]
     corr_m = np.zeros([num_rows, num_cols])
+    col_names = list()
     for col_ix in range(num_cols):
+        pair = corr_obj_list[col_ix].pair
+        col = f'{pair[0]},{pair[1]}'
+        col_names.append(col)
         corr_df = corr_obj_list[col_ix].corr_df
         for row_ix in range(num_rows):
             corr_m[row_ix, col_ix] = corr_df.iloc[row_ix]
     corr_df = pd.DataFrame(corr_m)
+    corr_df.columns = col_names
     corr_df.index = corr_obj_list[0].corr_df.index
     return corr_df
 
@@ -1142,21 +1142,35 @@ plot_two_ts(data_a=cor_dist_df, data_b=spy_close_s, title=f"Number of pairs with
 # </p>
 #
 
-def calc_corr_dependence(corr_df: pd.DataFrame, cutoff_first: float, cutoff_second: float ) -> Tuple:
-    corr_m = np.array(corr_df.values)
-    no_depend = 0
-    has_depend = 0
-    for col_ix in range(corr_m.shape[1]):
-        for row_ix in range(corr_m.shape[0]-1):
-            if corr_m[row_ix, col_ix] >= cutoff_first:
-                if corr_m[row_ix+1,col_ix] >= cutoff_second:
-                    has_depend = has_depend + 1
-                else:
-                    no_depend = no_depend + 1
-    return (no_depend, has_depend)
+class StatDependence:
+
+    def calc_corr_dependence(corr_df: pd.DataFrame, cutoff_first: float, cutoff_second: float ) -> Tuple:
+        corr_m = np.array(corr_df.values)
+        no_depend = 0
+        has_depend = 0
+        for col_ix in range(corr_m.shape[1]):
+            for row_ix in range(corr_m.shape[0]-1):
+                if corr_m[row_ix, col_ix] >= cutoff_first:
+                    if corr_m[row_ix+1,col_ix] >= cutoff_second:
+                        has_depend = has_depend + 1
+                    else:
+                        no_depend = no_depend + 1
+        return (no_depend, has_depend)
 
 
 no_depend, has_depend = calc_corr_dependence(corr_df, correlation_cutoff, correlation_cutoff - 0.10)
+
+depend_df = pd.DataFrame([has_depend, no_depend])
+depend_df = round(depend_df / depend_df.sum(), 2) * 100
+depend_df = depend_df.transpose()
+depend_df.columns = ['Dependence', 'No Dependence']
+depend_df.index = ['Correlation Dependence (percent)']
+print(tabulate(depend_df, headers=[*depend_df.columns], tablefmt='fancy_grid'))
+
+
+
+
+pass
 
 #
 # <h2>
