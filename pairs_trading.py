@@ -1100,36 +1100,134 @@ plot_two_ts(data_a=cor_dist_df, data_b=spy_close_df, title=f"Number of pairs wit
 # </p>
 
 class CalcDependence:
+    class CointInfo:
+        def __init__(self,
+                     pair_str: str,
+                     granger_conf: int,
+                     granger_weight: float,
+                     granger_pair: str,
+                     johansen_conf: int,
+                     johansen_weight: float,
+                     johansen_pair: str):
+            self.pair_str = pair_str
+            self.granger_conf = granger_conf
+            self.granger_weight = granger_weight
+            self.granger_pair = granger_pair
+            self.johansen_conf = johansen_conf
+            self.johansen_weight = johansen_weight
+            self.johansen_pair = johansen_pair
+
+        def __str__(self):
+            granger_str = f'granger:: conf:{self.granger_conf} weight: {self.granger_weight} pair: {self.granger_pair}'
+            johansen_str = f'johansen:: conf:{self.johansen_conf} weight: {self.johansen_weight} pair: {self.johansen_pair}'
+            s = granger_str + '\n' + johansen_str
+            return s
+
+    def __init__(self, close_prices_df: pd.DataFrame, cutoff: float, window: int):
+        self.close_prices_df = close_prices_df
+        self.cutoff = cutoff
+        self.window = window
+        self.window_start = 0
+        self.pair_stat = PairStatistics()
+
     """
     A class that packages code that calculates dependence.
     """
-    @staticmethod
-    def calc_corr_dependence(corr_df: pd.DataFrame, cutoff_first: float, cutoff_second: float ) -> Tuple:
+    def calc_corr_dependence(self, corr_df: pd.DataFrame, cutoff_second: float ) -> Tuple:
         corr_m = np.array(corr_df.values)
         no_depend = 0
         has_depend = 0
         for col_ix in range(corr_m.shape[1]):
             for row_ix in range(corr_m.shape[0]-1):
-                if corr_m[row_ix, col_ix] >= cutoff_first:
+                if corr_m[row_ix, col_ix] >= self.cutoff:
                     if corr_m[row_ix+1,col_ix] >= cutoff_second:
                         has_depend = has_depend + 1
                     else:
                         no_depend = no_depend + 1
         return (no_depend, has_depend)
 
-    @staticmethod
-    def calc_coint_dependence(corr_df: pd.DataFrame, close_prices_df: pd.DataFrame, cutoff: float, window: int):
-        window_start = 0
+
+    def calc_pair_coint(self, pair_str: str) -> CointInfo:
+        pair_l = pair_str.split(',')
+        asset_a = pd.DataFrame(self.close_prices_df[pair_l[0]].iloc[self.window_start:self.window_start + self.window])
+        asset_b = pd.DataFrame(self.close_prices_df[pair_l[1]].iloc[self.window_start:self.window_start + self.window])
+        granger_coint = self.pair_stat.engle_granger_coint(asset_a, asset_b)
+        johansen_coint = self.pair_stat.johansen_coint(asset_a, asset_b)
+        granger_pair_str = f'{granger_coint.asset_a},{granger_coint.asset_b}'
+        johansen_pair_str = f'{johansen_coint.asset_a},{johansen_coint.asset_b}'
+        coint_info = self.CointInfo(pair_str=pair_str,
+                                    granger_conf=granger_coint.confidence,
+                                    granger_weight=granger_coint.weight,
+                                    granger_pair=granger_pair_str,
+                                    johansen_conf=johansen_coint.confidence,
+                                    johansen_weight=johansen_coint.weight,
+                                    johansen_pair=johansen_pair_str)
+        return coint_info
+
+    def calc_coint_dependence(self, corr_df: pd.DataFrame ) -> pd.DataFrame:
+        coint_info_a = np.zeros(corr_df.shape, dtype='O')
+        self.window_start = 0
+        row_num = 0
         for ix_date, row in corr_df.iterrows():
-            for ix in range(corr_df.shape[1]):
-                if row[ix] > cutoff:
-                    pair_l = row.index[ix].split(',')
-            window_start = window_start + window
-            pass
+            print(f'processing row {row_num}')
+            col_ix = row >= self.cutoff
+            row_high_corr = row[col_ix]
+            pairs_str_l = list(row_high_corr.index)
+            pair_corr = row_high_corr.values
+            pair_corr_dict = dict(zip(pairs_str_l, pair_corr))
+            # coint_data_list = list()
+            # for pair_str in pairs_str_l:
+            #     coint_info = self.calc_pair_coint(pair_str)
+            #     coint_info.correlation = pair_corr_dict[pair_str]
+            #     coint_data_list.append(coint_info)
+            with Pool() as mp_pool:
+                coint_data_list = mp_pool.map(self.calc_pair_coint, pairs_str_l)
+            list_ix = 0
+            for col, has_high_corr in enumerate(col_ix):
+                if not has_high_corr:
+                    coint_info_a[row_num, col] = (row[col], None)
+                else:
+                    coint_info_a[row_num, col] = (row[col], coint_data_list[list_ix])
+                    list_ix = list_ix + 1
+            self.window_start = self.window_start + self.window
+            row_num = row_num + 1
+        coint_info_df = pd.DataFrame(coint_info_a)
+        coint_info_df.columns = corr_df.columns
+        coint_info_df.index = corr_df.index
+        return coint_info_df
+
+
+def coint_dependence(coint_info_df: pd.DataFrame) -> pd.DataFrame:
+    no_depend = 0
+    depend = 0
+    granger_depend = 0
+    johansen_depend = 0
+    both_depend = 0
+    for col_ix in range(coint_info_df.shape[1]):
+        for row_ix in range(coint_info_df.shape[0] - 1):
+            elem_tuple_n = coint_info_df.iloc[row_ix, col_ix]
+            elem_tuple_n_1 = coint_info_df.iloc[row_ix + 1, col_ix]
+            if (elem_tuple_n[1] is not None) and (elem_tuple_n_1[1] is not None):
+                coint_n = elem_tuple_n[1]
+                coint_n_1 = elem_tuple_n_1[1]
+                granger_coint_n = coint_n.granger_conf > 0
+                granger_coint_n_1 = coint_n_1.granger_conf > 0
+                johansen_coint_n = coint_n.johansen_conf > 0
+                johansen_coint_n_1 = coint_n_1.johansen_conf > 0
+                if granger_coint_n and granger_coint_n_1:
+                    granger_depend = granger_depend + 1
+                if johansen_coint_n and johansen_coint_n_1:
+                    johansen_depend = johansen_depend + 1
+                if granger_coint_n and johansen_coint_n and (granger_coint_n_1 or johansen_coint_n_1):
+                    both_depend = both_depend + 1
+    result_df = pd.DataFrame([granger_depend, johansen_depend, both_depend]).transpose()
+    result_df.columns = ['Granger', 'Johansen', 'Both']
+    return result_df
 
 
 
-no_depend, has_depend = CalcDependence.calc_corr_dependence(corr_df, correlation_cutoff, correlation_cutoff - 0.10)
+calc_dependence = CalcDependence(close_prices_df=close_prices_df, cutoff=correlation_cutoff, window=half_year)
+no_depend, has_depend = calc_dependence.calc_corr_dependence(corr_df, correlation_cutoff - 0.10)
 
 depend_df = pd.DataFrame([has_depend, no_depend])
 depend_df = round(depend_df / depend_df.sum(), 2) * 100
@@ -1149,7 +1247,12 @@ depend_df.index = ['Correlation Dependence (percent)']
 
 print(tabulate(depend_df, headers=[*depend_df.columns], tablefmt='fancy_grid'))
 
-CalcDependence.calc_coint_dependence(corr_df=corr_df, close_prices_df=close_prices_df, cutoff=correlation_cutoff, window=half_year)
+coint_info_df = calc_dependence.calc_coint_dependence(corr_df=corr_df)
+
+result_df = coint_dependence(coint_info_df)
+
+print(result_df)
+pass
 
 # -
 
