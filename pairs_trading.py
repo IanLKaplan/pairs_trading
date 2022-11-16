@@ -209,7 +209,9 @@
 
 import os
 from datetime import datetime
+from multiprocessing import cpu_count
 from multiprocessing import Pool
+from multiprocessing import get_context
 from typing import List, Tuple, Set
 
 import matplotlib.pyplot as plt
@@ -570,8 +572,8 @@ class PairStatistics:
         adf_result = adfuller(residuals)
         adf_stat = round(adf_result[0], self.decimals)
         critical_vals = adf_result[4]
-        cointegrated, interval = self.find_interval(adf_stat, critical_vals)
-        coint_data = CointData(cointegrated=cointegrated, confidence=interval, weight=slope, asset_a=sym_a, asset_b=sym_b)
+        cointegrated, confidence = self.find_interval(adf_stat, critical_vals)
+        coint_data = CointData(cointegrated=cointegrated, confidence=confidence, weight=slope, asset_a=sym_a, asset_b=sym_b)
         coint_data.set_intercept(intercept=intercept)
         return coint_data
 
@@ -1099,28 +1101,23 @@ plot_two_ts(data_a=cor_dist_df, data_b=spy_close_df, title=f"Number of pairs wit
 # then cointegration may not be persistent.
 # </p>
 
+
 class CalcDependence:
     class CointInfo:
         def __init__(self,
                      pair_str: str,
-                     granger_conf: int,
-                     granger_weight: float,
-                     granger_pair: str,
-                     johansen_conf: int,
-                     johansen_weight: float,
-                     johansen_pair: str):
+                     confidence: int,
+                     weight: float,
+                     intercept: float,
+                     halflife: int):
             self.pair_str = pair_str
-            self.granger_conf = granger_conf
-            self.granger_weight = granger_weight
-            self.granger_pair = granger_pair
-            self.johansen_conf = johansen_conf
-            self.johansen_weight = johansen_weight
-            self.johansen_pair = johansen_pair
+            self.confidence = confidence
+            self.weight = weight
+            self.intercept = intercept
+            self.halflife = halflife
 
         def __str__(self):
-            granger_str = f'granger:: conf:{self.granger_conf} weight: {self.granger_weight} pair: {self.granger_pair}'
-            johansen_str = f'johansen:: conf:{self.johansen_conf} weight: {self.johansen_weight} pair: {self.johansen_pair}'
-            s = granger_str + '\n' + johansen_str
+            s = f'confidence: {self.confidence} weight: {self.weight} intercept: {self.intercept} halflife: {self.halflife} pair: {self.pair_str}'
             return s
 
     def __init__(self, close_prices_df: pd.DataFrame, cutoff: float, window: int):
@@ -1146,22 +1143,45 @@ class CalcDependence:
                         no_depend = no_depend + 1
         return (no_depend, has_depend)
 
+    def compute_halflife(self, z_df: pd.DataFrame) -> int:
+        """
+        Calculate the half-life of a mean reverting stationary series where the series
+        is an Ornstein–Uhlenbeck process
+        From example 7.5 in Quantitative Trading by Ernest P. Chan
+        """
+        prevz = z_df.shift()
+        dz = z_df - prevz
+        dz = dz[1:]
+        prevz = prevz[1:]
+        norm_prevz = prevz - np.mean(prevz.values)
+        result = sm.OLS(dz, norm_prevz).fit()
+        theta = result.params
+        halflife_f = -np.log(2) / theta
+        halflife = round(halflife_f, 0)
+        return int(halflife)
 
     def calc_pair_coint(self, pair_str: str) -> CointInfo:
         pair_l = pair_str.split(',')
-        asset_a = pd.DataFrame(self.close_prices_df[pair_l[0]].iloc[self.window_start:self.window_start + self.window])
-        asset_b = pd.DataFrame(self.close_prices_df[pair_l[1]].iloc[self.window_start:self.window_start + self.window])
+        asset_a = pd.DataFrame(
+            self.close_prices_df[pair_l[0]].iloc[self.window_start:self.window_start + self.window])
+        asset_b = pd.DataFrame(
+            self.close_prices_df[pair_l[1]].iloc[self.window_start:self.window_start + self.window])
         granger_coint = self.pair_stat.engle_granger_coint(asset_a, asset_b)
-        johansen_coint = self.pair_stat.johansen_coint(asset_a, asset_b)
+        weight = granger_coint.weight
+        intercept = granger_coint.intercept
+        confidence = granger_coint.confidence
+        if asset_a.columns[0] != granger_coint.asset_a:
+            t = asset_a
+            asset_a = asset_b
+            asset_b = t
+        z_df = pd.DataFrame(asset_a.values - intercept - weight * asset_b.values)
+        halflife = self.compute_halflife(z_df)
         granger_pair_str = f'{granger_coint.asset_a},{granger_coint.asset_b}'
-        johansen_pair_str = f'{johansen_coint.asset_a},{johansen_coint.asset_b}'
-        coint_info = self.CointInfo(pair_str=pair_str,
-                                    granger_conf=granger_coint.confidence,
-                                    granger_weight=granger_coint.weight,
-                                    granger_pair=granger_pair_str,
-                                    johansen_conf=johansen_coint.confidence,
-                                    johansen_weight=johansen_coint.weight,
-                                    johansen_pair=johansen_pair_str)
+        coint_info = self.CointInfo(pair_str=granger_pair_str,
+                                    confidence=confidence,
+                                    weight=weight,
+                                    intercept=intercept,
+                                    halflife=halflife)
         return coint_info
 
     def calc_coint_dependence(self, corr_df: pd.DataFrame ) -> pd.DataFrame:
@@ -1170,18 +1190,22 @@ class CalcDependence:
         row_num = 0
         for ix_date, row in corr_df.iterrows():
             print(f'processing row {row_num}')
+            # col_ix: a boolean vector of size(row) or corr_df.shape[1]
             col_ix = row >= self.cutoff
+            # row_high_corr is a Series with the pairs string (e.g., 'FOO,BAR') as an index and the high correlation
+            # values as element values
             row_high_corr = row[col_ix]
             pairs_str_l = list(row_high_corr.index)
-            pair_corr = row_high_corr.values
-            pair_corr_dict = dict(zip(pairs_str_l, pair_corr))
-            # coint_data_list = list()
-            # for pair_str in pairs_str_l:
-            #     coint_info = self.calc_pair_coint(pair_str)
-            #     coint_info.correlation = pair_corr_dict[pair_str]
-            #     coint_data_list.append(coint_info)
-            with Pool() as mp_pool:
-                coint_data_list = mp_pool.map(self.calc_pair_coint, pairs_str_l)
+            coint_data_list = list()
+            for pair_str in pairs_str_l:
+                coint_info = self.calc_pair_coint(pair_str)
+                coint_data_list.append(coint_info)
+            # Multiprocessing does not seem to work reliably in Python. The multiprocessing code runs through some number
+            # of rows and then hangs. Perhaps this is a problem with Python multiprocessing on Linux. Multiprocessing
+            # delivers a significant speed improvement but the code never completes. I've tried everything I could think of
+            # and nothing helped. Perhaps a future version of Python (my version was Python 3.10).
+            # with Pool(cpu_count()) as mp_pool:
+            #     coint_data_list = mp_pool.map(self.calc_pair_coint, pairs_str_l)
             list_ix = 0
             for col, has_high_corr in enumerate(col_ix):
                 if not has_high_corr:
@@ -1198,30 +1222,27 @@ class CalcDependence:
 
 
 def coint_dependence(coint_info_df: pd.DataFrame) -> pd.DataFrame:
-    no_depend = 0
-    depend = 0
-    granger_depend = 0
-    johansen_depend = 0
-    both_depend = 0
-    for col_ix in range(coint_info_df.shape[1]):
-        for row_ix in range(coint_info_df.shape[0] - 1):
+    total_coint = 0
+    coint_depend = 0
+    num_cols = coint_info_df.shape[1]
+    num_rows = coint_info_df.shape[0]
+    for col_ix in range(num_cols):
+        for row_ix in range(num_rows - 1):
             elem_tuple_n = coint_info_df.iloc[row_ix, col_ix]
-            elem_tuple_n_1 = coint_info_df.iloc[row_ix + 1, col_ix]
-            if (elem_tuple_n[1] is not None) and (elem_tuple_n_1[1] is not None):
-                coint_n = elem_tuple_n[1]
-                coint_n_1 = elem_tuple_n_1[1]
-                granger_coint_n = coint_n.granger_conf > 0
-                granger_coint_n_1 = coint_n_1.granger_conf > 0
-                johansen_coint_n = coint_n.johansen_conf > 0
-                johansen_coint_n_1 = coint_n_1.johansen_conf > 0
-                if granger_coint_n and granger_coint_n_1:
-                    granger_depend = granger_depend + 1
-                if johansen_coint_n and johansen_coint_n_1:
-                    johansen_depend = johansen_depend + 1
-                if granger_coint_n and johansen_coint_n and (granger_coint_n_1 or johansen_coint_n_1):
-                    both_depend = both_depend + 1
-    result_df = pd.DataFrame([granger_depend, johansen_depend, both_depend]).transpose()
-    result_df.columns = ['Granger', 'Johansen', 'Both']
+            if elem_tuple_n[1] is not None:
+                coint_n_obj = elem_tuple_n[1]
+                coint_n = coint_n_obj.confidence > 0
+                if coint_n:
+                    total_coint += 1
+                    elem_tuple_n_1 = coint_info_df.iloc[row_ix + 1, col_ix]
+                    if elem_tuple_n_1[1] is not None:
+                        coint_n_1_obj = elem_tuple_n_1[1]
+                        coint_n_1 = coint_n_1_obj.confidence > 0
+                        if coint_n_1:
+                            coint_depend += 1
+
+    result_df = pd.DataFrame([total_coint, coint_depend] ).transpose()
+    result_df.columns = ['Total Coint', 'Coint Depend']
     return result_df
 
 
@@ -1249,9 +1270,23 @@ print(tabulate(depend_df, headers=[*depend_df.columns], tablefmt='fancy_grid'))
 
 coint_info_df = calc_dependence.calc_coint_dependence(corr_df=corr_df)
 
-result_df = coint_dependence(coint_info_df)
+coint_depend_df = coint_dependence(coint_info_df)
 
-print(result_df)
+print(tabulate(coint_depend_df, headers=[*coint_depend_df.columns], tablefmt='fancy_grid'))
+
+def get_half_life_vals(coint_info_df: pd.DataFrame) -> pd.DataFrame:
+    num_cols = coint_info_df.shape[1]
+    num_rows = coint_info_df.shape[0]
+    halflife_l = list()
+    for col_ix in range(num_cols):
+        for row_ix in range(num_rows):
+            obj = coint_info_df.iloc[row_ix, col_ix]
+            if obj[1] is not None:
+                if obj[1].confidence > 0:
+                    halflife_l.append(obj[1].halflife)
+    halflife_df = pd.DataFrame(halflife_l)
+    return halflife_df
+
 pass
 
 # -
