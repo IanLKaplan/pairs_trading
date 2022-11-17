@@ -1101,24 +1101,34 @@ plot_two_ts(data_a=cor_dist_df, data_b=spy_close_df, title=f"Number of pairs wit
 # then cointegration may not be persistent.
 # </p>
 
+class CointInfo:
+    def __init__(self,
+                 pair_str: str,
+                 confidence: int,
+                 weight: float,
+                 has_intercept: bool,
+                 intercept: float):
+        self.pair_str = pair_str
+        self.confidence = confidence
+        self.weight = weight
+        self.has_intercept = has_intercept
+        self.intercept = intercept
+
+    def __str__(self):
+        s_true = f'pair: {self.pair_str} confidence: {self.confidence} weight: {self.weight} intercept: {self.intercept}'
+        s_false = f'pair: {self.pair_str} confidence: {self.confidence} weight: {self.weight}'
+        s = s_true if self.has_intercept else s_false
+        return s
+
 
 class CalcDependence:
-    class CointInfo:
-        def __init__(self,
-                     pair_str: str,
-                     confidence: int,
-                     weight: float,
-                     intercept: float,
-                     halflife: int):
-            self.pair_str = pair_str
-            self.confidence = confidence
-            self.weight = weight
-            self.intercept = intercept
-            self.halflife = halflife
 
-        def __str__(self):
-            s = f'confidence: {self.confidence} weight: {self.weight} intercept: {self.intercept} halflife: {self.halflife} pair: {self.pair_str}'
-            return s
+    class CointAnalysisResult:
+        def __init__(self,
+                     granger_coint: CointInfo,
+                     johansen_coint: CointInfo):
+            self.granger_coint = granger_coint
+            self.johansen_coint = johansen_coint
 
     def __init__(self, close_prices_df: pd.DataFrame, cutoff: float, window: int):
         self.close_prices_df = close_prices_df
@@ -1160,29 +1170,33 @@ class CalcDependence:
         halflife = round(halflife_f, 0)
         return int(halflife)
 
-    def calc_pair_coint(self, pair_str: str) -> CointInfo:
+    def calc_pair_coint(self, pair_str: str) -> CointAnalysisResult:
         pair_l = pair_str.split(',')
         asset_a = pd.DataFrame(
             self.close_prices_df[pair_l[0]].iloc[self.window_start:self.window_start + self.window])
         asset_b = pd.DataFrame(
             self.close_prices_df[pair_l[1]].iloc[self.window_start:self.window_start + self.window])
         granger_coint = self.pair_stat.engle_granger_coint(asset_a, asset_b)
-        weight = granger_coint.weight
-        intercept = granger_coint.intercept
-        confidence = granger_coint.confidence
-        if asset_a.columns[0] != granger_coint.asset_a:
-            t = asset_a
-            asset_a = asset_b
-            asset_b = t
-        z_df = pd.DataFrame(asset_a.values - intercept - weight * asset_b.values)
-        halflife = self.compute_halflife(z_df)
-        granger_pair_str = f'{granger_coint.asset_a},{granger_coint.asset_b}'
-        coint_info = self.CointInfo(pair_str=granger_pair_str,
-                                    confidence=confidence,
-                                    weight=weight,
-                                    intercept=intercept,
-                                    halflife=halflife)
-        return coint_info
+        asset_a_str = asset_a.columns[0]
+        asset_b_str = asset_b.columns[1]
+        if asset_a_str != granger_coint.asset_a:
+            t = asset_a_str
+            asset_a_str = asset_b_str
+            asset_b_str = t
+        granger_pair_str = f'{asset_a_str},{asset_b_str}'
+        granger_coint_info = self.CointInfo(pair_str=granger_pair_str,
+                                    confidence=granger_coint.confidence,
+                                    weight=granger_coint.weight,
+                                    has_intercept=True,
+                                    intercept=granger_coint.intercept)
+        johansen_coint = self.pair_stat.johansen_coint(asset_a, asset_b)
+        johansen_coint_info = self.CointInfo(pair_str=pair_str,
+                                             confidence=johansen_coint.confidence,
+                                             weight=johansen_coint.weight,
+                                             has_intercept=False,
+                                             intercept=np.NAN)
+        coint_result = self.CointAnalysisResult(granger_coint=granger_coint_info, johansen_coint=johansen_coint_info)
+        return granger_coint_info
 
     def calc_coint_dependence(self, corr_df: pd.DataFrame ) -> pd.DataFrame:
         coint_info_a = np.zeros(corr_df.shape, dtype='O')
