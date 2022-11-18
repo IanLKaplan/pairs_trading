@@ -106,6 +106,10 @@ class MarketData:
         #     close_list.append(sym_close_df)
         for close_data in close_list:
             close_df = pd.concat([close_df, close_data], axis=1)
+        # The last row may be fetched from "today" and be NaN values. Remove this row
+        last_row = close_df[-1:]
+        if all(last_row.isna().all()):
+            close_df = close_df[:-1]
         # drop the stocks with different start dates
         close_df = close_df.dropna(axis='columns')
         return close_df

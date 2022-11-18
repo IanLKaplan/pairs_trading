@@ -220,8 +220,8 @@ import pandas as pd
 import seaborn as sns
 import statsmodels.api as sm
 from numpy import log
-from statsmodels.tsa.stattools import adfuller
 from tabulate import tabulate
+from enum import Enum
 
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
 from statsmodels.tsa.stattools import adfuller
@@ -941,7 +941,7 @@ class SerialCorrelation:
         col_names = list()
         for col_ix in range(num_cols):
             pair = corr_list[col_ix].pair
-            col = f'{pair[0]},{pair[1]}'
+            col = f'{pair[0]}:{pair[1]}'
             col_names.append(col)
             corr_df = corr_list[col_ix].corr_df
             for row_ix in range(num_rows):
@@ -1120,15 +1120,18 @@ class CointInfo:
         s = s_true if self.has_intercept else s_false
         return s
 
+class CointAnalysisResult:
+    def __init__(self,
+        granger_coint: CointInfo,
+        johansen_coint: CointInfo):
+        self.granger_coint = granger_coint
+        self.johansen_coint = johansen_coint
+
 
 class CalcDependence:
-
-    class CointAnalysisResult:
-        def __init__(self,
-                     granger_coint: CointInfo,
-                     johansen_coint: CointInfo):
-            self.granger_coint = granger_coint
-            self.johansen_coint = johansen_coint
+    class CointType(Enum):
+        GRANGER = 1
+        JOHANSEN = 2
 
     def __init__(self, close_prices_df: pd.DataFrame, cutoff: float, window: int):
         self.close_prices_df = close_prices_df
@@ -1136,6 +1139,13 @@ class CalcDependence:
         self.window = window
         self.window_start = 0
         self.pair_stat = PairStatistics()
+        self.cointegration_data_dir = 'cointegration_data'
+        self.correlation_file_name = 'correlation.csv'
+        self.granger_file_name = 'granger.csv'
+        self.johansen_file_name = 'johansen.csv'
+        self.correlation_file_path = self.cointegration_data_dir + os.path.sep + self.correlation_file_name
+        self.granger_file_path = self.cointegration_data_dir + os.path.sep + self.granger_file_name
+        self.johansen_file_path = self.cointegration_data_dir + os.path.sep + self.johansen_file_name
 
     """
     A class that packages code that calculates dependence.
@@ -1170,8 +1180,60 @@ class CalcDependence:
         halflife = round(halflife_f, 0)
         return int(halflife)
 
+    def write_correlation_matrix(self, coint_analysis: pd.DataFrame) -> None:
+        correlation_a = np.zeros(coint_analysis.shape)
+        num_rows = coint_analysis.shape[0]
+        num_columns = coint_analysis.shape[1]
+        for row_ix in range(num_rows):
+            for col_ix in range(num_columns):
+                correlation_a[row_ix, col_ix] = coint_analysis.iloc[row_ix, col_ix][0]
+        correlation_df = pd.DataFrame(correlation_a)
+        correlation_df.columns = coint_analysis.columns
+        correlation_df.index = correlation_df.index
+        correlation_df.to_csv(self.correlation_file_path)
+
+    def build_cointegeration_matrx(self, coint_analysis: pd.DataFrame, coint_type: CointType) -> pd.DataFrame:
+        row_list = list()
+        num_rows = coint_analysis.shape[0]
+        num_columns = coint_analysis.shape[1]
+        columns = ['row_ix', 'col_ix', 'confidence', 'pair_str', 'weight', 'has_intercept', 'intercept']
+        for row_ix in range(num_rows):
+            for col_ix in range(num_columns):
+                if coint_analysis.iloc[row_ix, col_ix][1] is not None:
+                    obj: CointAnalysisResult = coint_analysis.iloc[row_ix, col_ix][1]
+                    if coint_type == self.CointType.JOHANSEN:
+                        coint_obj: CointInfo = obj.johansen_coint
+                    else:
+                        coint_obj: CointInfo = obj.granger_coint
+                    row_tuple = (row_ix, col_ix, coint_obj.confidence, coint_obj.pair_str, coint_obj.weight, coint_obj.has_intercept, coint_obj.intercept)
+                    row_list.append(row_tuple)
+        coint_info_df = pd.DataFrame(row_list)
+        coint_info_df.columns = columns
+        return coint_info_df
+
+    def write_cointegration_matrix(self, coint_analysis: pd.DataFrame) -> None:
+        granger_coint_df = self.build_cointegeration_matrx(coint_analysis, self.CointType.GRANGER)
+        johansen_coint_df = self.build_cointegeration_matrx(coint_analysis, self.CointType.JOHANSEN)
+        granger_coint_df.to_csv(self.granger_file_path, index=False)
+        johansen_coint_df.to_csv(self.granger_file_path, index=False)
+
+    def write_files(self, coint_analysis: pd.DataFrame) -> None:
+        self.write_correlation_matrix(coint_analysis)
+        self.write_cointegration_matrix(coint_analysis)
+
+    def has_files(self) -> bool:
+        files_exist = False
+        if os.access(self.cointegration_data_dir, os.R_OK):
+            files_exist = os.access(self.correlation_file_path, os.R_OK) and \
+                          os.access(self.johansen_file_path, os.R_OK) and \
+                          os.access(self.granger_file_path, os.R_OK)
+        return files_exist
+
+    def read_files(self) -> pd.DataFrame:
+        pass
+
     def calc_pair_coint(self, pair_str: str) -> CointAnalysisResult:
-        pair_l = pair_str.split(',')
+        pair_l = pair_str.split(':')
         asset_a = pd.DataFrame(
             self.close_prices_df[pair_l[0]].iloc[self.window_start:self.window_start + self.window])
         asset_b = pd.DataFrame(
@@ -1183,7 +1245,7 @@ class CalcDependence:
             t = asset_a_str
             asset_a_str = asset_b_str
             asset_b_str = t
-        granger_pair_str = f'{asset_a_str},{asset_b_str}'
+        granger_pair_str = f'{asset_a_str}:{asset_b_str}'
         granger_coint_info = self.CointInfo(pair_str=granger_pair_str,
                                     confidence=granger_coint.confidence,
                                     weight=granger_coint.weight,
