@@ -211,7 +211,6 @@ import os
 from datetime import datetime
 from multiprocessing import cpu_count
 from multiprocessing import Pool
-from multiprocessing import get_context
 from typing import List, Tuple, Set
 
 import matplotlib.pyplot as plt
@@ -226,11 +225,14 @@ from enum import Enum
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
 from statsmodels.tsa.stattools import adfuller
 
+
 #
 # Local libraries
 #
 from plot_ts.plot_time_series import plot_ts, plot_two_ts
 from read_market_data.MarketData import MarketData
+from coint_analysis.coint_analysis_result import CointAnalysisResult, CointInfo
+from coint_data_io.coint_matrix_io import CointMatrixIO
 from utils.find_date_index import findDateIndex
 
 # Apply the default theme
@@ -1101,67 +1103,59 @@ plot_two_ts(data_a=cor_dist_df, data_b=spy_close_df, title=f"Number of pairs wit
 # then cointegration may not be persistent.
 # </p>
 
-class CointInfo:
-    def __init__(self,
-                 pair_str: str,
-                 confidence: int,
-                 weight: float,
-                 has_intercept: bool,
-                 intercept: float):
-        self.pair_str = pair_str
-        self.confidence = confidence
-        self.weight = weight
-        self.has_intercept = has_intercept
-        self.intercept = intercept
 
-    def __str__(self):
-        s_true = f'pair: {self.pair_str} confidence: {self.confidence} weight: {self.weight} intercept: {self.intercept}'
-        s_false = f'pair: {self.pair_str} confidence: {self.confidence} weight: {self.weight}'
-        s = s_true if self.has_intercept else s_false
-        return s
 
-class CointAnalysisResult:
-    def __init__(self,
-        granger_coint: CointInfo,
-        johansen_coint: CointInfo):
-        self.granger_coint = granger_coint
-        self.johansen_coint = johansen_coint
+
 
 
 class CalcDependence:
-    class CointType(Enum):
-        GRANGER = 1
-        JOHANSEN = 2
+    @staticmethod
+    def calc_corr_dependence(corr_df: pd.DataFrame, cutoff_first: float, cutoff_second: float ) -> Tuple:
+        corr_m = np.array(corr_df.values)
+        no_depend = 0
+        has_depend = 0
+        for col_ix in range(corr_m.shape[1]):
+            for row_ix in range(corr_m.shape[0]-1):
+                if corr_m[row_ix, col_ix] >= cutoff_first:
+                    if corr_m[row_ix+1,col_ix] >= cutoff_second:
+                        has_depend = has_depend + 1
+                    else:
+                        no_depend = no_depend + 1
+        return (no_depend, has_depend)
 
+    @staticmethod
+    def coint_dependence(coint_info_df: pd.DataFrame) -> pd.DataFrame:
+        total_coint = 0
+        coint_depend = 0
+        num_cols = coint_info_df.shape[1]
+        num_rows = coint_info_df.shape[0]
+        for col_ix in range(num_cols):
+            for row_ix in range(num_rows - 1):
+                elem_tuple_n = coint_info_df.iloc[row_ix, col_ix]
+                if elem_tuple_n[1] is not None:
+                    coint_n_obj = elem_tuple_n[1]
+                    coint_n = coint_n_obj.confidence > 0
+                    if coint_n:
+                        total_coint += 1
+                        elem_tuple_n_1 = coint_info_df.iloc[row_ix + 1, col_ix]
+                        if elem_tuple_n_1[1] is not None:
+                            coint_n_1_obj = elem_tuple_n_1[1]
+                            coint_n_1 = coint_n_1_obj.confidence > 0
+                            if coint_n_1:
+                                coint_depend += 1
+        result_df = pd.DataFrame([total_coint, coint_depend]).transpose()
+        result_df.columns = ['Total Coint', 'Coint Depend']
+        return result_df
+
+class CalcPairsCointegration:
     def __init__(self, close_prices_df: pd.DataFrame, cutoff: float, window: int):
         self.close_prices_df = close_prices_df
         self.cutoff = cutoff
         self.window = window
         self.window_start = 0
         self.pair_stat = PairStatistics()
-        self.cointegration_data_dir = 'cointegration_data'
-        self.correlation_file_name = 'correlation.csv'
-        self.granger_file_name = 'granger.csv'
-        self.johansen_file_name = 'johansen.csv'
-        self.correlation_file_path = self.cointegration_data_dir + os.path.sep + self.correlation_file_name
-        self.granger_file_path = self.cointegration_data_dir + os.path.sep + self.granger_file_name
-        self.johansen_file_path = self.cointegration_data_dir + os.path.sep + self.johansen_file_name
+        self.coint_matrix_io = CointMatrixIO()
 
-    """
-    A class that packages code that calculates dependence.
-    """
-    def calc_corr_dependence(self, corr_df: pd.DataFrame, cutoff_second: float ) -> Tuple:
-        corr_m = np.array(corr_df.values)
-        no_depend = 0
-        has_depend = 0
-        for col_ix in range(corr_m.shape[1]):
-            for row_ix in range(corr_m.shape[0]-1):
-                if corr_m[row_ix, col_ix] >= self.cutoff:
-                    if corr_m[row_ix+1,col_ix] >= cutoff_second:
-                        has_depend = has_depend + 1
-                    else:
-                        no_depend = no_depend + 1
-        return (no_depend, has_depend)
 
     def compute_halflife(self, z_df: pd.DataFrame) -> int:
         """
@@ -1179,95 +1173,6 @@ class CalcDependence:
         halflife_f = -np.log(2) / theta
         halflife = round(halflife_f, 0)
         return int(halflife)
-
-    def write_correlation_matrix(self, coint_analysis: pd.DataFrame) -> None:
-        """
-        Write out the pairs correlation DataFrame. The structure of the DataFrame is a set of
-        columns with the pair names (e.g., 'AAPL:MPWR') and an index for the date that
-        starts the time period. This code builds a new DaataFrame that does not include
-        the cointegration data.
-
-        :param coint_analysis: a DataFrame with the correlation and cointegeration data.
-        :return: Nothing.
-        """
-        correlation_a = np.zeros(coint_analysis.shape)
-        num_rows = coint_analysis.shape[0]
-        num_columns = coint_analysis.shape[1]
-        for row_ix in range(num_rows):
-            for col_ix in range(num_columns):
-                correlation_a[row_ix, col_ix] = coint_analysis.iloc[row_ix, col_ix][0]
-        correlation_df = pd.DataFrame(correlation_a)
-        correlation_df.columns = coint_analysis.columns
-        correlation_df.index = coint_analysis.index
-        correlation_df.to_csv(self.correlation_file_path, index_label='Date')
-
-    def build_cointegeration_matrx(self, coint_analysis: pd.DataFrame, coint_type: CointType) -> pd.DataFrame:
-        """
-        Build a DataFrame that contains either the Granger or the Johansen cointegration data.
-
-        The coint_analysis DataFrame contains elements that include the correlation value and objects with the
-        Granger and Johansen data. This function builds a new DataFrame with the cointegration data.
-
-        The resulting DataFrame includes row and column numbers which serve as foreign keys that can be used
-        to reconstruct the original DataFrame.
-
-        :param coint_analysis:
-        :param coint_type:
-        :return:
-        """
-        row_list = list()
-        num_rows = coint_analysis.shape[0]
-        num_columns = coint_analysis.shape[1]
-        for row_ix in range(num_rows):
-            for col_ix in range(num_columns):
-                if coint_analysis.iloc[row_ix, col_ix][1] is not None:
-                    obj: CointAnalysisResult = coint_analysis.iloc[row_ix, col_ix][1]
-                    if coint_type == self.CointType.JOHANSEN:
-                        coint_obj: CointInfo = obj.johansen_coint
-                    else:
-                        coint_obj: CointInfo = obj.granger_coint
-                    row_tuple = (row_ix, col_ix, coint_obj.confidence, coint_obj.pair_str, coint_obj.weight, coint_obj.has_intercept, coint_obj.intercept)
-                    row_list.append(row_tuple)
-        coint_info_df = pd.DataFrame(row_list)
-        columns = ['row_ix', 'col_ix', 'confidence', 'pair_str', 'weight', 'has_intercept', 'intercept']
-        coint_info_df.columns = columns
-        return coint_info_df
-
-    def write_cointegration_matrix(self, coint_analysis: pd.DataFrame) -> None:
-        granger_coint_df = self.build_cointegeration_matrx(coint_analysis, self.CointType.GRANGER)
-        johansen_coint_df = self.build_cointegeration_matrx(coint_analysis, self.CointType.JOHANSEN)
-        granger_coint_df.to_csv(self.granger_file_path, index=False)
-        johansen_coint_df.to_csv(self.johansen_file_path, index=False)
-
-    def write_files(self, coint_analysis: pd.DataFrame) -> None:
-        self.write_correlation_matrix(coint_analysis)
-        self.write_cointegration_matrix(coint_analysis)
-
-    def has_files(self) -> bool:
-        files_exist = False
-        if os.access(self.cointegration_data_dir, os.R_OK):
-            files_exist = os.access(self.correlation_file_path, os.R_OK) and \
-                          os.access(self.johansen_file_path, os.R_OK) and \
-                          os.access(self.granger_file_path, os.R_OK)
-        return files_exist
-
-
-    def read_files(self) -> pd.DataFrame:
-        """
-        Cointegeration DataFrames:
-
-        row, column, confidence, pair_str, weight, has_intercept, intercept
-
-        :return:
-        """
-        correlation_df = pd.read_csv(self.correlation_file_path, index_col='Date')
-        granger_coint_df = pd.read_csv(self.granger_file_path)
-        johansen_coint_df = pd.read_csv(self.granger_file_path)
-        corr_obj_max = np.zeros(correlation_df.shape, dtype='O')
-        for row_ix in range(correlation_df.shape[0]):
-            for col_ix in range(correlation_df.shape[1]):
-                corr_val = correlation_df.iloc[row_ix, col_ix]
-
 
     def calc_pair_coint(self, pair_str: str) -> CointAnalysisResult:
         pair_l = pair_str.split(':')
@@ -1297,71 +1202,49 @@ class CalcDependence:
         coint_result = CointAnalysisResult(granger_coint=granger_coint_info, johansen_coint=johansen_coint_info)
         return coint_result
 
-    def calc_coint_dependence(self, corr_df: pd.DataFrame ) -> pd.DataFrame:
-        coint_info_a = np.zeros(corr_df.shape, dtype='O')
-        self.window_start = 0
-        row_num = 0
-        for ix_date, row in corr_df.iterrows():
-            print(f'processing row {row_num}')
-            # col_ix: a boolean vector of size(row) or corr_df.shape[1]
-            col_ix = row >= self.cutoff
-            # row_high_corr is a Series with the pairs string (e.g., 'FOO,BAR') as an index and the high correlation
-            # values as element values
-            row_high_corr = row[col_ix]
-            pairs_str_l = list(row_high_corr.index)
-            coint_data_list = list()
-            for pair_str in pairs_str_l:
-                coint_info = self.calc_pair_coint(pair_str)
-                coint_data_list.append(coint_info)
-            # Multiprocessing does not seem to work reliably in Python. The multiprocessing code runs through some number
-            # of rows and then hangs. Perhaps this is a problem with Python multiprocessing on Linux. Multiprocessing
-            # delivers a significant speed improvement but the code never completes. I've tried everything I could think of
-            # and nothing helped. Perhaps a future version of Python (my version was Python 3.10).
-            # with Pool(cpu_count()) as mp_pool:
-            #     coint_data_list = mp_pool.map(self.calc_pair_coint, pairs_str_l)
-            list_ix = 0
-            for col, has_high_corr in enumerate(col_ix):
-                if not has_high_corr:
-                    coint_info_a[row_num, col] = (row[col], None)
-                else:
-                    coint_info_a[row_num, col] = (row[col], coint_data_list[list_ix])
-                    list_ix = list_ix + 1
-            self.window_start = self.window_start + self.window
-            row_num = row_num + 1
-        coint_info_df = pd.DataFrame(coint_info_a)
-        coint_info_df.columns = corr_df.columns
-        coint_info_df.index = corr_df.index
+    def calc_pairs_coint_dataframe(self, corr_df: pd.DataFrame) -> pd.DataFrame:
+        if self.coint_matrix_io.has_files():
+            coint_info_df = self.coint_matrix_io.read_files()
+        else:
+            coint_info_a = np.zeros(corr_df.shape, dtype='O')
+            self.window_start = 0
+            row_num = 0
+            for ix_date, row in corr_df.iterrows():
+                print(f'CalcPairsCointegration::calc_pairs_coint_dataframe: processing row {row_num}')
+                # col_ix: a boolean vector of size(row) or corr_df.shape[1]
+                col_ix = row >= self.cutoff
+                # row_high_corr is a Series with the pairs string (e.g., 'FOO,BAR') as an index and the high correlation
+                # values as element values
+                row_high_corr = row[col_ix]
+                pairs_str_l = list(row_high_corr.index)
+                coint_data_list = list()
+                for pair_str in pairs_str_l:
+                    coint_info = self.calc_pair_coint(pair_str)
+                    coint_data_list.append(coint_info)
+                # Multiprocessing does not seem to work reliably in Python. The multiprocessing code runs through some number
+                # of rows and then hangs. Perhaps this is a problem with Python multiprocessing on Linux. Multiprocessing
+                # delivers a significant speed improvement but the code never completes. I've tried everything I could think of
+                # and nothing helped. Perhaps a future version of Python (my version was Python 3.10).
+                # with Pool(cpu_count()) as mp_pool:
+                #     coint_data_list = mp_pool.map(self.calc_pair_coint, pairs_str_l)
+                list_ix = 0
+                for col, has_high_corr in enumerate(col_ix):
+                    if not has_high_corr:
+                        coint_info_a[row_num, col] = (row[col], None)
+                    else:
+                        coint_info_a[row_num, col] = (row[col], coint_data_list[list_ix])
+                        list_ix = list_ix + 1
+                self.window_start = self.window_start + self.window
+                row_num = row_num + 1
+            coint_info_df = pd.DataFrame(coint_info_a)
+            coint_info_df.columns = corr_df.columns
+            coint_info_df.index = corr_df.index
+            self.coint_matrix_io.write_files(coint_info_df)
         return coint_info_df
 
 
-def coint_dependence(coint_info_df: pd.DataFrame) -> pd.DataFrame:
-    total_coint = 0
-    coint_depend = 0
-    num_cols = coint_info_df.shape[1]
-    num_rows = coint_info_df.shape[0]
-    for col_ix in range(num_cols):
-        for row_ix in range(num_rows - 1):
-            elem_tuple_n = coint_info_df.iloc[row_ix, col_ix]
-            if elem_tuple_n[1] is not None:
-                coint_n_obj = elem_tuple_n[1]
-                coint_n = coint_n_obj.confidence > 0
-                if coint_n:
-                    total_coint += 1
-                    elem_tuple_n_1 = coint_info_df.iloc[row_ix + 1, col_ix]
-                    if elem_tuple_n_1[1] is not None:
-                        coint_n_1_obj = elem_tuple_n_1[1]
-                        coint_n_1 = coint_n_1_obj.confidence > 0
-                        if coint_n_1:
-                            coint_depend += 1
-
-    result_df = pd.DataFrame([total_coint, coint_depend] ).transpose()
-    result_df.columns = ['Total Coint', 'Coint Depend']
-    return result_df
-
-
-
-calc_dependence = CalcDependence(close_prices_df=close_prices_df, cutoff=correlation_cutoff, window=half_year)
-no_depend, has_depend = calc_dependence.calc_corr_dependence(corr_df, correlation_cutoff - 0.10)
+calc_dependence = CalcPairsCointegration(close_prices_df=close_prices_df, cutoff=correlation_cutoff, window=half_year)
+no_depend, has_depend = CalcDependence.calc_corr_dependence(corr_df, correlation_cutoff, correlation_cutoff - 0.10)
 
 depend_df = pd.DataFrame([has_depend, no_depend])
 depend_df = round(depend_df / depend_df.sum(), 2) * 100
@@ -1381,10 +1264,9 @@ depend_df.index = ['Correlation Dependence (percent)']
 
 print(tabulate(depend_df, headers=[*depend_df.columns], tablefmt='fancy_grid'))
 
-coint_info_df = calc_dependence.calc_coint_dependence(corr_df=corr_df)
-calc_dependence.write_files(coint_info_df)
+coint_info_df = calc_dependence.calc_pairs_coint_dataframe(corr_df=corr_df)
 
-coint_depend_df = coint_dependence(coint_info_df)
+coint_depend_df = CalcDependence.coint_dependence(coint_info_df)
 
 print(tabulate(coint_depend_df, headers=[*coint_depend_df.columns], tablefmt='fancy_grid'))
 
