@@ -1199,7 +1199,7 @@ class CalcDependence:
         correlation_df = pd.DataFrame(correlation_a)
         correlation_df.columns = coint_analysis.columns
         correlation_df.index = coint_analysis.index
-        correlation_df.to_csv(self.correlation_file_path)
+        correlation_df.to_csv(self.correlation_file_path, index_label='Date')
 
     def build_cointegeration_matrx(self, coint_analysis: pd.DataFrame, coint_type: CointType) -> pd.DataFrame:
         """
@@ -1284,16 +1284,16 @@ class CalcDependence:
             asset_b_str = t
         granger_pair_str = f'{asset_a_str}:{asset_b_str}'
         granger_coint_info = CointInfo(pair_str=granger_pair_str,
-                                    confidence=granger_coint.confidence,
-                                    weight=granger_coint.weight,
-                                    has_intercept=True,
-                                    intercept=granger_coint.intercept)
+                                       confidence=granger_coint.confidence,
+                                       weight=granger_coint.weight,
+                                       has_intercept=True,
+                                       intercept=granger_coint.intercept)
         johansen_coint = self.pair_stat.johansen_coint(asset_a, asset_b)
         johansen_coint_info = CointInfo(pair_str=pair_str,
-                                             confidence=johansen_coint.confidence,
-                                             weight=johansen_coint.weight,
-                                             has_intercept=False,
-                                             intercept=np.NAN)
+                                        confidence=johansen_coint.confidence,
+                                        weight=johansen_coint.weight,
+                                        has_intercept=False,
+                                        intercept=np.NAN)
         coint_result = CointAnalysisResult(granger_coint=granger_coint_info, johansen_coint=johansen_coint_info)
         return coint_result
 
