@@ -1,4 +1,5 @@
 import os
+from typing import Tuple
 
 import pandas as pd
 import numpy as np
@@ -94,6 +95,41 @@ class CointMatrixIO:
                           os.access(self.granger_file_path, os.R_OK)
         return files_exist
 
+    def build_coint_info(self, coint_row: pd.DataFrame) -> CointInfo:
+        # columns: row_ix, col_ix, confidence, pair_str, weight, has_intercept, intercept
+        pair_str = coint_row['pair_str']
+        confidence = coint_row['confidence']
+        weight = coint_row['weight']
+        has_intercept = coint_row['has_intercept']
+        intercept = coint_row['intercept']
+        info = CointInfo(pair_str=pair_str,
+                         confidence=confidence,
+                         weight=weight,
+                         has_intercept=has_intercept,
+                         intercept=intercept)
+        return info
+
+    def add_coint_info(self, coint_info_a: np.array, coint_type: CointType) -> None:
+        if coint_type == self.CointType.GRANGER:
+            coint_data = pd.read_csv(self.granger_file_path)
+        else:
+            coint_data = pd.read_csv(self.johansen_file_path)
+        assert coint_data.shape[0] == coint_info_a.shape[0] * coint_info_a.shape[1]
+        for _, row in coint_data.iterrows():
+            # columns: row_ix, col_ix, confidence, pair_str, weight, has_intercept, intercept
+            coint_info = self.build_coint_info(row)
+            row_ix = row['row_ix']
+            col_ix = row['col_ix']
+            if coint_info_a[row_ix, col_ix] == 0:
+                coint_info_a[row_ix, col_ix] = (0.0, CointAnalysisResult())
+            elem: Tuple = coint_info_a[row_ix, col_ix]
+            coint: CointAnalysisResult = elem[1]
+            if coint_type == self.CointType.GRANGER:
+                coint.granger_coint = coint_info
+            else:
+                coint.johansen_coint = coint_info
+
+
     def read_files(self) -> pd.DataFrame:
         """
         Cointegeration DataFrames:
@@ -103,9 +139,15 @@ class CointMatrixIO:
         :return:
         """
         correlation_df = pd.read_csv(self.correlation_file_path, index_col='Date')
-        granger_coint_df = pd.read_csv(self.granger_file_path)
-        johansen_coint_df = pd.read_csv(self.granger_file_path)
-        corr_obj_max = np.zeros(correlation_df.shape, dtype='O')
+        coint_info_a = np.zeros(correlation_df.shape, dtype='O')
+        self.add_coint_info(coint_info_a, self.CointType.GRANGER)
+        self.add_coint_info(coint_info_a, self.CointType.JOHANSEN)
         for row_ix in range(correlation_df.shape[0]):
             for col_ix in range(correlation_df.shape[1]):
                 corr_val = correlation_df.iloc[row_ix, col_ix]
+                elem: Tuple = coint_info_a[row_ix, col_ix]
+                elem[0] = corr_val
+        coint_info_df = pd.DataFrame(coint_info_a)
+        coint_info_df.columns = correlation_df.columns
+        coint_info_df.index = correlation_df.index
+        return coint_info_df

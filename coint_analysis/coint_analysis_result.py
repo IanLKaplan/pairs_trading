@@ -20,7 +20,7 @@ class CointInfo:
 
 class CointAnalysisResult:
     def __init__(self,
-                 granger_coint: CointInfo,
-                 johansen_coint: CointInfo):
+                 granger_coint: CointInfo = None,
+                 johansen_coint: CointInfo = None):
         self.granger_coint = granger_coint
         self.johansen_coint = johansen_coint
