@@ -1148,14 +1148,10 @@ class CalcDependence:
         return result_df
 
 class CalcPairsCointegration:
-    def __init__(self, close_prices_df: pd.DataFrame, cutoff: float, window: int):
+    def __init__(self, close_prices_df: pd.DataFrame):
         self.close_prices_df = close_prices_df
-        self.cutoff = cutoff
-        self.window = window
-        self.window_start = 0
         self.pair_stat = PairStatistics()
         self.coint_matrix_io = CointMatrixIO()
-
 
     def compute_halflife(self, z_df: pd.DataFrame) -> int:
         """
@@ -1174,12 +1170,12 @@ class CalcPairsCointegration:
         halflife = round(halflife_f, 0)
         return int(halflife)
 
-    def calc_pair_coint(self, pair_str: str) -> CointAnalysisResult:
+    def calc_pair_coint(self, pair_str: str, window_start: int, window: int) -> CointAnalysisResult:
         pair_l = pair_str.split(':')
         asset_a = pd.DataFrame(
-            self.close_prices_df[pair_l[0]].iloc[self.window_start:self.window_start + self.window])
+            self.close_prices_df[pair_l[0]].iloc[window_start:window_start + window])
         asset_b = pd.DataFrame(
-            self.close_prices_df[pair_l[1]].iloc[self.window_start:self.window_start + self.window])
+            self.close_prices_df[pair_l[1]].iloc[window_start:window_start + window])
         granger_coint = self.pair_stat.engle_granger_coint(asset_a, asset_b)
         asset_a_str = asset_a.columns[0]
         asset_b_str = asset_b.columns[0]
@@ -1202,40 +1198,21 @@ class CalcPairsCointegration:
         coint_result = CointAnalysisResult(granger_coint=granger_coint_info, johansen_coint=johansen_coint_info)
         return coint_result
 
-    def calc_pairs_coint_dataframe(self, corr_df: pd.DataFrame) -> pd.DataFrame:
+    def calc_pairs_coint_dataframe(self, corr_df: pd.DataFrame, window: int) -> pd.DataFrame:
         if self.coint_matrix_io.has_files():
             coint_info_df = self.coint_matrix_io.read_files()
         else:
             coint_info_a = np.zeros(corr_df.shape, dtype='O')
-            self.window_start = 0
-            row_num = 0
-            for ix_date, row in corr_df.iterrows():
-                print(f'CalcPairsCointegration::calc_pairs_coint_dataframe: processing row {row_num}')
-                # col_ix: a boolean vector of size(row) or corr_df.shape[1]
-                col_ix = row >= self.cutoff
-                # row_high_corr is a Series with the pairs string (e.g., 'FOO,BAR') as an index and the high correlation
-                # values as element values
-                row_high_corr = row[col_ix]
-                pairs_str_l = list(row_high_corr.index)
-                coint_data_list = list()
-                for pair_str in pairs_str_l:
-                    coint_info = self.calc_pair_coint(pair_str)
-                    coint_data_list.append(coint_info)
-                # Multiprocessing does not seem to work reliably in Python. The multiprocessing code runs through some number
-                # of rows and then hangs. Perhaps this is a problem with Python multiprocessing on Linux. Multiprocessing
-                # delivers a significant speed improvement but the code never completes. I've tried everything I could think of
-                # and nothing helped. Perhaps a future version of Python (my version was Python 3.10).
-                # with Pool(cpu_count()) as mp_pool:
-                #     coint_data_list = mp_pool.map(self.calc_pair_coint, pairs_str_l)
-                list_ix = 0
-                for col, has_high_corr in enumerate(col_ix):
-                    if not has_high_corr:
-                        coint_info_a[row_num, col] = (row[col], None)
-                    else:
-                        coint_info_a[row_num, col] = (row[col], coint_data_list[list_ix])
-                        list_ix = list_ix + 1
-                self.window_start = self.window_start + self.window
-                row_num = row_num + 1
+            pairs_l = list(corr_df.columns)
+            window_start = 0
+            for row_ix in range(corr_df.shape[0]):
+                print(f'CalcPairsCointegration::calc_pairs_coint_dataframe: processing row {row_ix}')
+                for col_ix in range(corr_df.shape[1]):
+                    pair_str = pairs_l[col_ix]
+                    coint_info = self.calc_pair_coint(pair_str=pair_str, window_start=window_start, window=window)
+                    correlation = corr_df.iloc[row_ix, col_ix]
+                    coint_info_a[row_ix, col_ix] = (correlation, coint_info)
+                window_start = window_start + window
             coint_info_df = pd.DataFrame(coint_info_a)
             coint_info_df.columns = corr_df.columns
             coint_info_df.index = corr_df.index
@@ -1243,7 +1220,7 @@ class CalcPairsCointegration:
         return coint_info_df
 
 
-calc_dependence = CalcPairsCointegration(close_prices_df=close_prices_df, cutoff=correlation_cutoff, window=half_year)
+calc_dependence = CalcPairsCointegration(close_prices_df=close_prices_df)
 no_depend, has_depend = CalcDependence.calc_corr_dependence(corr_df, correlation_cutoff, correlation_cutoff - 0.10)
 
 depend_df = pd.DataFrame([has_depend, no_depend])
@@ -1264,7 +1241,7 @@ depend_df.index = ['Correlation Dependence (percent)']
 
 print(tabulate(depend_df, headers=[*depend_df.columns], tablefmt='fancy_grid'))
 
-coint_info_df = calc_dependence.calc_pairs_coint_dataframe(corr_df=corr_df)
+coint_info_df = calc_dependence.calc_pairs_coint_dataframe(corr_df=corr_df, window=half_year)
 
 coint_depend_df = CalcDependence.coint_dependence(coint_info_df)
 
