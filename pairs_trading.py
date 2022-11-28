@@ -1132,17 +1132,15 @@ class CalcDependence:
         for col_ix in range(num_cols):
             for row_ix in range(num_rows - 1):
                 elem_tuple_n = coint_info_df.iloc[row_ix, col_ix]
-                if elem_tuple_n[1] is not None:
-                    coint_n_obj = elem_tuple_n[1]
-                    coint_n = coint_n_obj.confidence > 0
-                    if coint_n:
-                        total_coint += 1
-                        elem_tuple_n_1 = coint_info_df.iloc[row_ix + 1, col_ix]
-                        if elem_tuple_n_1[1] is not None:
-                            coint_n_1_obj = elem_tuple_n_1[1]
-                            coint_n_1 = coint_n_1_obj.confidence > 0
-                            if coint_n_1:
-                                coint_depend += 1
+                coint_n_obj: CointAnalysisResult = elem_tuple_n[1]
+                coint_n = coint_n_obj.granger_coint.confidence > 0 or coint_n_obj.johansen_coint.confidence > 0
+                if coint_n:
+                    total_coint += 1
+                    elem_tuple_n_1 = coint_info_df.iloc[row_ix + 1, col_ix]
+                    coint_n_1_obj = elem_tuple_n_1[1]
+                    coint_n_1 = coint_n_1_obj.granger_coint.confidence > 0 or coint_n_1_obj.johansen_coint.confidence > 0
+                    if coint_n_1:
+                        coint_depend += 1
         result_df = pd.DataFrame([total_coint, coint_depend]).transpose()
         result_df.columns = ['Total Coint', 'Coint Depend']
         return result_df
