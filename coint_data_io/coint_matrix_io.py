@@ -15,14 +15,16 @@ class CointMatrixIO:
         GRANGER = 1
         JOHANSEN = 2
 
-    def __init__(self):
+    def __init__(self, test=False):
+        self.test = test
         self.cointegration_data_dir = 'cointegration_data'
+        self.cointegration_data_path = '..' + os.path.sep + self.cointegration_data_dir if self.test else self.cointegration_data_dir
         self.correlation_file_name = 'correlation.csv'
         self.granger_file_name = 'granger.csv'
         self.johansen_file_name = 'johansen.csv'
-        self.correlation_file_path = self.cointegration_data_dir + os.path.sep + self.correlation_file_name
-        self.granger_file_path = self.cointegration_data_dir + os.path.sep + self.granger_file_name
-        self.johansen_file_path = self.cointegration_data_dir + os.path.sep + self.johansen_file_name
+        self.correlation_file_path = self.cointegration_data_path + os.path.sep + self.correlation_file_name
+        self.granger_file_path = self.cointegration_data_path + os.path.sep + self.granger_file_name
+        self.johansen_file_path = self.cointegration_data_path + os.path.sep + self.johansen_file_name
 
     def write_correlation_matrix(self, coint_analysis: pd.DataFrame) -> None:
         """
@@ -89,7 +91,7 @@ class CointMatrixIO:
 
     def has_files(self) -> bool:
         files_exist = False
-        if os.access(self.cointegration_data_dir, os.R_OK):
+        if os.access(self.cointegration_data_path, os.R_OK):
             files_exist = os.access(self.correlation_file_path, os.R_OK) and \
                           os.access(self.johansen_file_path, os.R_OK) and \
                           os.access(self.granger_file_path, os.R_OK)
@@ -109,27 +111,6 @@ class CointMatrixIO:
                          intercept=intercept)
         return info
 
-    def add_coint_info(self, coint_info_a: np.array, coint_type: CointType) -> None:
-        if coint_type == self.CointType.GRANGER:
-            coint_data = pd.read_csv(self.granger_file_path)
-        else:
-            coint_data = pd.read_csv(self.johansen_file_path)
-        assert coint_data.shape[0] == coint_info_a.shape[0] * coint_info_a.shape[1]
-        for _, row in coint_data.iterrows():
-            # columns: row_ix, col_ix, confidence, pair_str, weight, has_intercept, intercept
-            coint_info = self.build_coint_info(row)
-            row_ix = row['row_ix']
-            col_ix = row['col_ix']
-            if coint_info_a[row_ix, col_ix] == 0:
-                coint_info_a[row_ix, col_ix] = (0.0, CointAnalysisResult())
-            elem: Tuple = coint_info_a[row_ix, col_ix]
-            coint: CointAnalysisResult = elem[1]
-            if coint_type == self.CointType.GRANGER:
-                coint.granger_coint = coint_info
-            else:
-                coint.johansen_coint = coint_info
-
-
     def read_files(self) -> pd.DataFrame:
         """
         Cointegeration DataFrames:
@@ -140,14 +121,32 @@ class CointMatrixIO:
         """
         correlation_df = pd.read_csv(self.correlation_file_path, index_col='Date')
         coint_info_a = np.zeros(correlation_df.shape, dtype='O')
-        self.add_coint_info(coint_info_a, self.CointType.GRANGER)
-        self.add_coint_info(coint_info_a, self.CointType.JOHANSEN)
+        coint_data_granger = pd.read_csv(self.granger_file_path)
+        coint_data_johansen = pd.read_csv(self.johansen_file_path)
+        coint_row = 0
         for row_ix in range(correlation_df.shape[0]):
             for col_ix in range(correlation_df.shape[1]):
                 corr_val = correlation_df.iloc[row_ix, col_ix]
-                elem: Tuple = coint_info_a[row_ix, col_ix]
-                elem[0] = corr_val
+                granger_row = coint_data_granger.iloc[coint_row, :]
+                johansen_row = coint_data_johansen.iloc[coint_row, :]
+                assert granger_row['row_ix'] == row_ix and granger_row['col_ix'] == col_ix and \
+                       johansen_row['row_ix'] == row_ix and johansen_row['col_ix'] == col_ix
+                granger_obj = self.build_coint_info(granger_row)
+                johansen_obj = self.build_coint_info(johansen_row)
+                coint_analysis_obj = CointAnalysisResult(granger_coint=granger_obj, johansen_coint=johansen_obj)
+                tuple_obj = (corr_val, coint_analysis_obj)
+                coint_info_a[row_ix, col_ix] = tuple_obj
+                coint_row += 1
         coint_info_df = pd.DataFrame(coint_info_a)
         coint_info_df.columns = correlation_df.columns
         coint_info_df.index = correlation_df.index
         return coint_info_df
+
+
+def main() -> None:
+    coint_matrix_io = CointMatrixIO(test=True)
+    coint_info_df = coint_matrix_io.read_files()
+    pass
+
+if __name__ == '__main__':
+    main()
