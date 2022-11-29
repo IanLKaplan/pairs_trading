@@ -56,14 +56,16 @@
 # <p>
 # Markets tend toward efficiency and many quantitative approaches fade over time as they are adopted by hedge funds. Pairs trading
 # goes back to the mid-1980s. Surprisingly, the approach still seems to be profitable. One reason for this could be that there are a vast
-# number of possible pairs and the pairs portfolio's tend to be fairly small (5 to 20 pairs, in most cases). This could
+# number of possible pairs and the pairs portfolio is a faction of the pairs universe. This could
 # leave unexploited pairs in the market. Pairs trading may also be difficult to scale to a level that would be attractive to institutional
 # traders, like hedge funds, so the strategy has not been arbitraged out of the market.
 # </p>
 # <p>
 # Mathematical finance often uses models that are based on normal distributions, constant means and standard deviations. Actual market
 # data is often not normally distributed and changes constantly. The statistics used to select stocks for pairs trading makes an assumption
-# that the pair distribution has a constant mean and standard deviation. This assumption holds, at best, over a window of time.
+# that the pair distribution has a constant mean and standard deviation (e.g., the pairs spread is a stationary time series). This
+# assumption holds, at best, over a window of time. This notebook explores the statistics of the cointegrated pairs that are candidates
+# for pairs trading.
 # </p>
 # <p>
 # The statistics that predict a successful pair will not be accurate in all time periods. For the strategy to be successful, the predicition
@@ -78,7 +80,8 @@
 # Trading</i> by Ernest P. Chan.
 # </p>
 # <p>
-# The pairs trading strategy attempts to find a pair of stocks that, together, form a mean reverting time series.
+# The pairs trading strategy attempts to find a pair of stocks where the weighted spread between the stock close prices is
+# mean reverting.
 # </p>
 # <p>
 # Implementing the pairs trading strategy involves two logical steps:
@@ -92,8 +95,8 @@
 # <li>
 # <p>
 # Trading the stocks using the long/short strategy over the trading period. This involves building a trading signal
-# from the close prices of the stock pair. When the trading signal is above or below the mean at some threshold value
-# a long and short position are taken in the two stocks.
+# from the weighted spread formed from the close prices of the stock pair. When the trading signal is above or below
+# the mean by some threshold value, a long and short position are taken in the two stocks.
 # </p>
 # </li>
 # </ol>
@@ -104,24 +107,24 @@
 # S&P 500 Industry Sectors
 # </h3>
 # <p>
-# Pairs are selected from the S&P 500 stock universe. These stocks are have a high trading volume, with a small bid-ask spread. These stocks
-# are also easier to short, with lower borrowing fees.
+# In this notebook, pairs are selected from the S&P 500 stock universe. These stocks are have a high trading volume, with a small
+# bid-ask spread. These stocks are also easier to short, with lower borrowing fees.
 # </p>
 # <p>
-# In pairs selection we are trying to find pairs that are cointegrated and have mean reverting behavior. The stock pairs should
+# In pairs selection we are trying to find pairs that are cointegrated, where the price spread has mean reverting behavior. The stock pairs should
 # have some logical connection. In the book <i>Pairs Trading</i> the author discusses using factor models to select pairs with
 # similar factor characteristics.
 # </p>
 # <p>
 # Factor models are often built using company fundamental factors like earnings, corporate debt and cash flow. These factors
-# tend to be generic in that many companies in completely different industry sectors may have similar fundamental factors.  When selecting pairs
+# tend to be generic. Many companies in completely different industry sectors may have similar fundamental factors.  When selecting pairs
 # we would like to select stocks that are affected by similar market forces. For example, oil companies in the energy sector tend to be
-# affected similar economic and market forces. Factors affecting companies outside the energy sector can be much more complicated.
+# affected the same economic and market forces. Factors affecting companies outside the energy sector can be much more complicated.
 # In many cases the factors that affect S&P 500 companies are broad economic factors which are not obviously useful in choosing pairs
 # for mean reversion trading.
 # </p>
 # <p>
-# In lieu of specific factors for most pairs, the S&P 500 industry sector is used as the set from which pairs are drawn.
+# In lieu of specific factors, the S&P 500 industry sector is used as the set from which pairs are drawn.
 # Although not perfect, industry sector will tend to select stocks with similar behavior, while reducing the universe of
 # stocks from which pairs are selected.
 # </p>
@@ -184,9 +187,9 @@
 # the data, but subsequent runs could read the data from local temporary files.
 # </p>
 # <p>
-# Downloading all of the close price data every day would have a high overhead for the S&P 500 stocks. To avoid this, the
-# data is downloaded once and stored in local files. When the notebook is run at later times, only the data between the
-# end of the last date in the file and the current end date will be downloaded.
+# For the S&P 500 stock universe, downloading all of the close price data the first time the notebook is run would have an unacceptable
+# overhead. To avoid this, the data is downloaded once and stored in local files. When the notebook is run at later times, only the
+# data between the end of the last date in the file and the current end date will be downloaded.
 # </p>
 # <p>
 # There are stocks in the S&P 500 list that were listed on the stock exchange later than the start date.  These
@@ -209,9 +212,8 @@
 
 import os
 from datetime import datetime
-from multiprocessing import cpu_count
 from multiprocessing import Pool
-from typing import List, Tuple, Set
+from typing import List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -219,12 +221,11 @@ import pandas as pd
 import seaborn as sns
 import statsmodels.api as sm
 from numpy import log
+from statsmodels.tsa.stattools import adfuller
 from tabulate import tabulate
-from enum import Enum
 
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
 from statsmodels.tsa.stattools import adfuller
-
 
 #
 # Local libraries
@@ -233,6 +234,8 @@ from plot_ts.plot_time_series import plot_ts, plot_two_ts
 from read_market_data.MarketData import MarketData
 from coint_analysis.coint_analysis_result import CointAnalysisResult, CointInfo
 from coint_data_io.coint_matrix_io import CointMatrixIO
+
+
 from utils.find_date_index import findDateIndex
 
 # Apply the default theme
@@ -374,7 +377,8 @@ print(tabulate(pairs_info_df, headers=[*pairs_info_df.columns], tablefmt='fancy_
 # </p>
 # <p>
 # In using a lookback period to choose trading pairs we are making the assumption that the past
-# will resemble the future trading period. The longer the lookback period, the less likely it is that the statistics will match
+# will resemble the future trading period (this notebook explores the reliability of this assumption).
+# The longer the lookback period, the less likely it is that the statistics will match
 # the trading period. This creates a tension between statistical accuracy and statistics that are more likely to reflect
 # the future trading period.
 # </p>
@@ -388,10 +392,10 @@ print(tabulate(pairs_info_df, headers=[*pairs_info_df.columns], tablefmt='fancy_
 # Mean Reversion
 # </h2>
 # <p>
-# A single stock price series (or log price) is rarely stationary and mean reverting.
-# In selecting stock pairs we are looking for a stock pair that, when combined, is stationary and mean reverting. A stationary time series
+# A single stock price (or log price) series is rarely stationary and mean reverting.
+# In selecting stock pairs we are looking for a stock pair with a spread time series that is stationary and mean reverting. A stationary time series
 # is a time series that has a constant mean and standard deviation. Stock time series are constantly changing, so we are looking for
-# a pair that can form a stationary and mean reverting time series over a particular time window.
+# a pair that has a spread that is stationary and mean reverting over the back test period.
 # </p>
 # <p>
 # When a pair forms a mean reverting, stationary time series, it is referred to as a cointegrated time series.
@@ -409,27 +413,27 @@ print(tabulate(pairs_info_df, headers=[*pairs_info_df.columns], tablefmt='fancy_
 # </p>
 # </blockquote>
 # <p>
-# In the equation below, <i>m</i> is a stationary mean reverting time series, P<sub>A</sub> is the price series for stock A,
+# In the equation below, <i>s</i> is the stationary mean reverting weighted spread time series, P<sub>A</sub> is the price series for stock A,
 # P<sub>B</sub> is the price series for stock B and β is the weight factor (for one share of stock A there will be β shares of
 # stock B).
 # </p>
 #
-# \$  m = P_A - \beta P_B $
+# \$ s = P_A - \beta P_B $
 #
-# \$ m = \mu  \space when \space P_A = \beta P_B $
+# \$ s = \mu  \space when \space P_A = \beta P_B $
 #
-# \$ m > \mu + \delta \space when \space P_A > \beta P_B \space (short \space P_A, \space long \space P_B) $
+# \$ s > \mu + \delta \space when \space P_A > \beta P_B \space (short \space P_A, \space long \space P_B) $
 #
-# \$ m < \mu + \delta \space when \space P_A < \beta P_B \space (long \space P_A, \space sort \space P_B) $
+# \$ s < \mu + \delta \space when \space P_A < \beta P_B \space (long \space P_A, \space sort \space P_B) $
 #
 # <p>
-# When <i>m</i> is above the mean at some level (perhaps one standard deviation), a short position will be taken in stock A
-# and a long position will be taken in stock B.  When <i>m</i> is below the mean at some level (perhaps one standard deviation)
+# When <i>s</i> is above the mean at some level (perhaps one standard deviation), a short position will be taken in stock A
+# and a long position will be taken in stock B.  When <i>s</i> is below the mean at some level (perhaps one standard deviation)
 # a long position will be taken in stock A and a short position will be taken in stock B. The position taken in stock B will be
 # larger than the postion in stock A by a factor of β.
 # </p>
 # <p>
-# In identifying a pair for pairs trading a determination is made on whether <i>m</i> is mean reverting.  The process of determining
+# In identifying a pair for pairs trading a determination is made on whether <i>s</i> is mean reverting.  The process of determining
 # mean reversion will also provide the value of β.
 # </p>
 # <h2>
@@ -574,8 +578,8 @@ class PairStatistics:
         adf_result = adfuller(residuals)
         adf_stat = round(adf_result[0], self.decimals)
         critical_vals = adf_result[4]
-        cointegrated, confidence = self.find_interval(adf_stat, critical_vals)
-        coint_data = CointData(cointegrated=cointegrated, confidence=confidence, weight=slope, asset_a=sym_a, asset_b=sym_b)
+        cointegrated, interval = self.find_interval(adf_stat, critical_vals)
+        coint_data = CointData(cointegrated=cointegrated, confidence=interval, weight=slope, asset_a=sym_a, asset_b=sym_b)
         coint_data.set_intercept(intercept=intercept)
         return coint_data
 
@@ -654,7 +658,8 @@ cor_df.index = ['2007']
 # </h3>
 # <p>
 # AAPL (Apple Inc), MPWR (Monolithic Power Systems, Inc) are in the technology industry sector.  YUM (Yum brands is a food company in a
-# different industry sector). The correlations with AAPL in the first half of 2007 are shown below.
+# different industry sector). The correlations with AAPL in the first half of 2007 are shown below.  AAPL and MPWR are both technology sector
+# stocks, while YUM brands is a food company. Other than overall stock market dynamics, we would not expect AAPL and YUM to be correlated.
 # </p>
 
 # +
@@ -663,6 +668,25 @@ print(tabulate(cor_df, headers=[*cor_df.columns], tablefmt='fancy_grid'))
 
 # -
 
+# <p>
+# Monolithic Power Systems, Inc. (MPWR) stock grew at a rate that was similar to Apple's, although their everall market
+# capitalization is a faction of Apples now. I was unfamiliar with MPWR until I wrote this notebook. Bloomberg's describes
+# MPWR's business as:
+# </p>
+# <blockquote>
+# Monolithic Power Systems, Inc. designs and manufactures power management solutions. The Company provides power conversion, LED lighting, load switches, cigarette lighter adapters, chargers, position sensors, analog input, and other electrical components. Monolithic Power Systems serves customers globally.
+# </blockquote>
+# <p>
+# A brief digression: Apple is now (2022) one of the most
+# valuable companies in the world. A number of investment funds bought Apple shares and were able to beat the overall market
+# for the years when Apple had exceptional growth.
+# </p>
+# <p>
+# My father invested in such a fund. Every quarter they sent out a "market outlook"
+# newsletter. This newsletter was filled with blather to make fund investors think that the people managing the fund had special insight into the
+# stock market (which justified the fees the fund charged). In fact, their only insight was their position in Apple stock.
+# When Apple's share price plateaued, so did the funds returns.
+# </p>
 # <p>
 # Pairs may have high correlation without being cointegrated.  The (Engle) Granger test shows that in the first half of 2007
 # AAPL and MPWR were cointegrated at the 99% level.
@@ -691,7 +715,7 @@ stationary_df = pair_stat.stationary_series(data_a=data_a, data_b=data_b, coint_
 # 90% confidence.
 # </p>
 # <p>
-# The plot below shows the stationary time series formed by
+# The plot below shows the stationary spread time series formed by
 # </p>
 #
 # \$  m = MPWR - intercept - 3.7 * AAPL $
@@ -825,13 +849,12 @@ print(f'Granger test for cointegration (AAPL/GPN): second half of 2007 {coint_da
 # The Johansen Test
 # </h3>
 # <p>
-# Unlike the Granger linear regression based test, the Johansen test can be used on more than two assets. The result is a multi-factor
-# linear model for the cointegration mean reverting time series.
+# The Granger linear regression based test can only be used for two assets. The Johansen test can be used on more than two assets.
 # </p>
 # <p>
-# The Johansen test uses eigenvalue decomposition for the estimation of cointegration. The Granger test has two steps: linear regression
-# and the ADF test. The Johansen test is a single test that also provides the weight factor. There is no linear constant (regression intercept)
-# as there is with the Granger test.
+# The Johansen test uses eigenvalue decomposition for the estimation of cointegration. In contract to the Granger test which has two steps:
+# linear regression and the ADF test, the Johansen test is a single step test that also provides the weight factors. There is no linear
+# constant (regression intercept) as there is with the Granger test, so the Johansen result may not have a mean of zero.
 # </p>
 # <p>
 # The Johansen test and the Granger test do not always agree. The Johansen test is applied to AAPL/MPWR for the close prices from the first
@@ -855,7 +878,7 @@ print(f'Johansen test for cointegration (AAPL/MPWR), first half of 2007 : {coint
 # </p>
 # <p>
 # Stocks that are strongly correlated are more likely to also exhibit mean reversion since they have similar market behavior.
-# This section examines the correlation distribution for the S&P 500 sector pairs.
+# This section examines the correlation statistics for the S&P 500 sector pairs.
 # </p>
 #
 
@@ -997,24 +1020,9 @@ plot_ts(data_s=apple_corr_df[0], title=f'correlation between {apple_tuple[0]} an
 
 # <p>
 # Since correlation is not stable, a stock pair that is highly correlated in one time period may be uncorrelated (or negatively
-# correlated) in another time period.
+# correlated) in the next time period.
 # </p>
-# <p>
-# Monolithic Power Systems, Inc. (MPWR) stock grew at a rate that was similar to Apple's, although their everall market
-# capitalization is a faction of Apples now. I was unfamiliar with MPWR until I wrote this notebook. Bloomberg's describes
-# MPWR's business as:
-# </p>
-# <blockquote>
-# Monolithic Power Systems, Inc. designs and manufactures power management solutions. The Company provides power conversion, LED lighting, load switches, cigarette lighter adapters, chargers, position sensors, analog input, and other electrical components. Monolithic Power Systems serves customers globally.
-# </blockquote>
-# <p>
-# A brief digression: Adjusted for splits, Apple Inc (AAPL) was about $4.33 per share. Apple is now (2022) one of the most
-# valuable companies in the world. A number of investment funds bought Apple shares and were able to beat the overall market
-# for the years when Apple has exceptional growth. My father invested in such a fund. Every quarter they sent out a "market outlook"
-# new letter. This was filled with blather to make fund investors think that the people managing the fund had special insight into the
-# stock market (which justified the fees the fund charged). In fact, their only insight was their position in Apple stock.
-# When Apple's share price plateaued, so did the funds returns.
-# </p>
+#
 
 # +
 
@@ -1103,8 +1111,139 @@ plot_two_ts(data_a=cor_dist_df, data_b=spy_close_df, title=f"Number of pairs wit
 # then cointegration may not be persistent.
 # </p>
 
+# +
+
+class Statistics:
+    def __init__(self):
+        # Total pairs - the size of the data frame: shape[0] * shape[1]
+        self.total_pairs: int = 0
+        # Total number of pairs that have Granger cointegration
+        self.total_granger: int = 0
+        # Total number of pairs that have Johansen cointegration
+        self.total_johansen: int = 0
+        # A list of correlation values where the value is associated with Granger OR Johansen cointegration
+        # The length of this list is the total cointegration number
+        self.corr_granger_or_johansen: List = list()
+        # A list of correlation values where the value is associatedwith Granger AND Johansen cointegration
+        self.corr_granger_and_johansen: List = list()
+        # Correlation for the in-sample element where there is serial cointegration Granger OR Johansen
+        # The length of this list is the total for the serial cointegration
+        self.serial_coint_corr: List = list()
+        # Total number of negative correlation pairs
+        self.total_neg_correlation: int = 0
+        # Negative correlation for the in-sample pair element where there is Granger or Johansen cointegration
+        self.neg_corr_coint: List = list()
+        # Negative correlation for pair with serial correlation
+        self.neg_corr_serial_coint: List = list()
+        # Number of pairs with Granger serial cointegration
+        self.granger_serial_coint: int = 0
+        # Number of pairs with Johansen serial cointegratoin
+        self.johansen_serial_coint: int = 0
+        # Number of pairs with Granger AND Johansen serial cointegration
+        self.granger_and_johansen_serial_coint: int = 0
+        # Number of Granger coint pairs with 90% confidence that are serially cointegrated
+        self.granger_serial_coint_90: int = 0
+        # Number of Granger coint pairs with 95% confidence that are serially cointegrated
+        self.granger_serial_coint_95: int = 0
+        # Number of Granger coint pairs with 99% confidence that are serially cointegrated
+        self.granger_serial_coint_99: int = 0
+        # Number of Johansen coint pairs with 90% confidence that are serially cointegrated
+        self.johansen_serial_coint_90: int = 0
+        # Number of Johansen coint pairs with 95% confidence that are serially cointegrated
+        self.johansen_serial_coint_95: int = 0
+        # Number of Johansen coint pairs with 99% confidence that are serially cointegrated
+        self.johansen_serial_coint_99: int = 0
 
 
+
+class CalcStatistics:
+    def __init__(self, cutoff: float) -> None:
+        self.cutoff = cutoff
+
+    def negative_correlation(self,
+                             correlation_n: float,
+                             is_n_granger_coint: bool,
+                             is_n_johansen_coint: bool,
+                             is_n_1_granger_coint: bool,
+                             is_n_1_johansen_coint: bool,
+                             stats: Statistics) -> None:
+        stats.total_neg_correlation += 1
+        is_n_either_coint = is_n_granger_coint or is_n_johansen_coint
+        is_n_1_either_coint = is_n_1_granger_coint or is_n_1_johansen_coint
+        if is_n_either_coint:
+            stats.neg_corr_coint.append(correlation_n)
+            if is_n_1_either_coint:
+                stats.neg_corr_serial_coint.append(correlation_n)
+
+    def add_coint_stats(self,
+                        correlation_n: float,
+                        is_n_granger_coint: bool,
+                        is_n_johansen_coint: bool,
+                        is_n_1_granger_coint: bool,
+                        is_n_1_johansen_coint: bool,
+                        stats: Statistics) -> None:
+        is_n_either_coint = is_n_granger_coint or is_n_johansen_coint
+        is_n_both_coint = is_n_granger_coint and is_n_johansen_coint
+        is_n_1_either_coint = is_n_1_granger_coint or is_n_1_johansen_coint
+        is_n_1_both_coint = is_n_1_granger_coint and is_n_1_johansen_coint
+        if is_n_granger_coint:
+            stats.total_granger += 1
+        if is_n_johansen_coint:
+            stats.total_johansen += 1
+        if is_n_either_coint:
+            stats.corr_granger_or_johansen.append(correlation_n)
+        if is_n_both_coint:
+            stats.corr_granger_and_johansen.append(correlation_n)
+        if is_n_either_coint and is_n_1_either_coint:
+            stats.serial_coint_corr.append(correlation_n)
+        if is_n_granger_coint and is_n_1_granger_coint:
+            stats.granger_serial_coint += 1
+        if is_n_johansen_coint and is_n_1_johansen_coint:
+            stats.johansen_serial_coint += 1
+        if is_n_both_coint and is_n_1_both_coint:
+            stats.granger_and_johansen_serial_coint += 1
+
+    def confidence_stats(self, elem_n_coint, elem_n_1_coint, stats):
+        pass
+
+    def col_stats(self, elem_n_tuple: Tuple, elem_n_1_tuple: Tuple, rows: int, row_ix: int, stats: Statistics) -> None:
+        correlation_n = elem_n_tuple[0]
+        elem_n_coint: CointAnalysisResult = elem_n_tuple[1]
+        elem_n_1_coint: CointAnalysisResult = elem_n_1_tuple[1]
+        elem_n_granger = elem_n_coint.granger_coint
+        is_n_granger_coint = elem_n_granger.confidence > 0
+        elem_n_johansen = elem_n_coint.johansen_coint
+        is_n_johansen_coint = elem_n_johansen.confidence > 0
+        elem_n_1_granger = elem_n_1_coint.granger_coint
+        is_n_1_granger_coint = elem_n_1_granger.confidence > 0
+        elem_n_1_johansen = elem_n_1_coint.johansen_coint
+        is_n_1_johansen_coint = elem_n_1_johansen.confidence > 0
+        if correlation_n < -self.cutoff:
+            self.negative_correlation(correlation_n,
+                                      is_n_granger_coint,
+                                      is_n_johansen_coint,
+                                      is_n_1_granger_coint,
+                                      is_n_1_johansen_coint,
+                                      stats)
+        self.add_coint_stats(correlation_n,
+                             is_n_granger_coint,
+                             is_n_johansen_coint,
+                             is_n_1_granger_coint,
+                             is_n_1_johansen_coint,
+                             stats)
+        self.confidence_stats(elem_n_coint, elem_n_1_coint, stats)
+
+
+    def traverse(self, coint_info_df: pd.DataFrame) -> Statistics:
+        stats = Statistics()
+        rows = coint_info_df.shape[0]
+        cols = coint_info_df.shape[1]
+        stats.total_pairs = rows * cols
+        for col_ix in range(cols):
+            for row_ix in range(rows-1):
+                elem_n_tuple: Tuple = coint_info_df.iloc[row_ix, col_ix]
+                elem_n_1_tuple: Tuple = coint_info_df.iloc[row_ix+1, col_ix]
+                self.col_stats(elem_n_tuple, elem_n_1_tuple, rows, row_ix, stats)
 
 
 
@@ -1144,6 +1283,160 @@ class CalcDependence:
         result_df = pd.DataFrame([total_coint, coint_depend]).transpose()
         result_df.columns = ['Total Coint', 'Coint Depend']
         return result_df
+
+
+no_depend, has_depend = CalcDependence.calc_corr_dependence(corr_df, correlation_cutoff, correlation_cutoff - 0.10)
+
+depend_df = pd.DataFrame([has_depend, no_depend])
+depend_df = round(depend_df / depend_df.sum(), 2) * 100
+depend_df = depend_df.transpose()
+depend_df.columns = ['Dependence', 'No Dependence']
+depend_df.index = ['Correlation Dependence (percent)']
+
+# -
+
+# <p>
+# The table below shows the dependence between correlation in the past period and correlation in the next period. The correlation is the
+# past period is at least 0.75. The correlation in the next period is at least 0.60.
+# </p>
+
+# +
+
+print(tabulate(depend_df, headers=[*depend_df.columns], tablefmt='fancy_grid'))
+
+# -
+
+#
+
+# <h2>
+# Correlation and Cointegration Questions
+# </h2>
+# <ol>
+#  <li>
+#     <p>
+#       Cointegration statistics
+#     </p>
+#     <ul>
+#       <li>
+#         Percentage of pairs with Granger cointegration
+#       </li>
+#       <li>
+#         Percentage of pairs with Johansen cointegeration
+#       </li>
+#       <li>
+#           Percentage of pairs that are Granger AND Johansen cointegrated.
+#       </li>
+#       <li>
+#          Histogram of the correlation value vs Granger OR Johansen cointegration count.
+#       </li>
+#       <li>
+#          Histogram of correlation value vs Granger AND Johansen cointegration count.
+#       </li>
+#     </ul>
+#   </li>
+#   <li>
+#     <p>
+#       Cointegration (mean reversion) stability
+#     </p>
+#     <ul>
+#       <li>
+#          Compared to total cointegration, what is the percentage where there is serial cointegration (Granger OR Johansen)
+#       </li>
+#       <li>
+#          What is the correlation distribution for serial cointegration? Histogram of the in-sample correlation vs the count
+#          of serial correlation.
+#       </li>
+#       <li>
+#          Compared to the total number of pairs with a negative correlation and cointegration, what is the percentage that
+#          has serial correlation.
+#       </li>
+#       <li>
+#          Compared to the total number of pairs with Granger cointegration, what is the percentage with Granger
+#          serial correlation.
+#       </li>
+#       <li>
+#          Compared to the total number of pairs with Johansen cointegration, what is the percentage with Johansen
+#          serial correlation.
+#       </li>
+#       <li>
+#          Compared to the total number of pairs with <i>both</i> Granger and Johansen cointegration, who many pairs have
+#          serial correlation with either Johansen or Granger.
+#       </li>
+#       <li>
+#          <ul>
+#            <li>
+#               For pairs with Granger cointegration with 90% confidence, what is the percentage for serial Granger cointegration.
+#            </li>
+#            <li>
+#               For pairs with Granger cointegration with 95% confidence, what is the percentage for serial Granger cointegration.
+#            </li>
+#            <li>
+#               For pairs with Granger cointegration with 99% confidence, what is the percentage for serial Granger cointegration.
+#            </li>
+#          </ul>
+#       </li>
+#       <li>
+#          <ul>
+#            <li>
+#               For pairs with Johansen cointegration with 90% confidence, what is the percentage for serial Johansen cointegration.
+#            </li>
+#            <li>
+#               For pairs with Johansen cointegration with 95% confidence, what is the percentage for serial Johansen cointegration.
+#            </li>
+#            <li>
+#               For pairs with Johansen cointegration with 99% confidence, what is the percentage for serial Johansen cointegration.
+#            </li>
+#          </ul>
+#       </li>
+#     </ul>
+#   </li>
+# </ol>
+# <h2>
+# Stability of Cointegeration
+# </h2>
+# <p>
+# Cointegration for a pair is calculated over an in-sample look-back period. When a pair is found to be cointegrated, trading takes place
+# in the out-of-sample period. For example, cointegration is calculated over a half year look-back period. Trading, using the cointegration spread,
+# takes place over a three month out-of-sample period following the look-back period.
+# </p>
+# <p>
+# For a cointegrated pair, the spread time series is, in an ideal world, a stationary time series with a constant mean and standard deviation.
+# The spread time series is mean reverting, so that divergences from the mean return to the mean. The statistics of the spread time series,
+# in an ideal world, are consistent between the look-back period and the trading period.
+# </p>
+# <p>
+# In the real world, stock and stock pair behavior is constantly changing.  For pairs trading to succeed in the real world (as opposed to
+# the ideal world), the mean reversion of the spread time series must persist (be stationary) between the look-back period and the trading
+# period often enough to yield a profit.
+# </p>
+# <p>
+# There is no way to know if a pair will remain stationary between the look-back period and the trading period. What can be examined
+# are the historical frequences where there is stationarity between the look-back period and the trading period.
+# </p>
+# <p>
+# There are a limited number of six month time periods. Looking at the stationarity for a single pair would not be statistically
+# significant, but we can look over all 8863 pairs over 32 time periods.
+# </p>
+# <h3>
+# Computation
+# </h3>
+# <p>
+# For every pair the correlation, granger cointegration and johansen cointegeration is calculated. The calculation is very compute intensive
+# and Python is notorious for being slow compared to C++ and Java (Python does, however, have lots of support for statistics and data analysis).
+# I have only succeeded in successfully doing this calculation in a single Python thread.  I tried to use Python's Pool parallelism which would
+# allow me to run the calculation in parallel on the 16-CPU cores on my Linux system. Unfortunately this resulted in a segment fault
+# causing the calculation to fail.
+# </p>
+# <p>
+# The historical calculation is constant (since the historical data is constant). To avoid recalculating the correlation and cointegration
+# data, the values are stored in files. A Pandas DataFrame is constructed from this data.
+# </p>
+# <p>
+# The data in these files can be recalculated by removing the files and running the notebook.
+# </p>
+#
+
+# +
 
 class CalcPairsCointegration:
     def __init__(self, close_prices_df: pd.DataFrame):
@@ -1197,6 +1490,13 @@ class CalcPairsCointegration:
         return coint_result
 
     def calc_pairs_coint_dataframe(self, corr_df: pd.DataFrame, window: int) -> pd.DataFrame:
+        """
+        :param corr_df: a data frame of pairs correlation values, where the index is the date and
+                        the columns are the pairs
+        :param window:  the look back window
+        :return: a data frame of tuples composed of a correlation value and the granger and johansen cointegeration
+                 objects.
+        """
         if self.coint_matrix_io.has_files():
             coint_info_df = self.coint_matrix_io.read_files()
         else:
@@ -1218,32 +1518,18 @@ class CalcPairsCointegration:
         return coint_info_df
 
 
-calc_dependence = CalcPairsCointegration(close_prices_df=close_prices_df)
-no_depend, has_depend = CalcDependence.calc_corr_dependence(corr_df, correlation_cutoff, correlation_cutoff - 0.10)
-
-depend_df = pd.DataFrame([has_depend, no_depend])
-depend_df = round(depend_df / depend_df.sum(), 2) * 100
-depend_df = depend_df.transpose()
-depend_df.columns = ['Dependence', 'No Dependence']
-depend_df.index = ['Correlation Dependence (percent)']
-
-# -
-
-# <p>
-# The table below shows the dependence between correlation in the past period and correlation in the next period. The correlation is the
-# past period is at least 0.75. The correlation in the next period is at least 0.60.
-# </p>
-
-# +
-
-
-print(tabulate(depend_df, headers=[*depend_df.columns], tablefmt='fancy_grid'))
-
-coint_info_df = calc_dependence.calc_pairs_coint_dataframe(corr_df=corr_df, window=half_year)
+cointegration_calc = CalcPairsCointegration(close_prices_df=close_prices_df)
+coint_info_df = cointegration_calc.calc_pairs_coint_dataframe(corr_df=corr_df, window=half_year)
 
 coint_depend_df = CalcDependence.coint_dependence(coint_info_df)
 
+# -
+
+#
+# Cointegration dependence: total number of pairs that are cointegrated and the number of pairs where the next time period is cointegerated.
+
 print(tabulate(coint_depend_df, headers=[*coint_depend_df.columns], tablefmt='fancy_grid'))
+
 
 def get_half_life_vals(coint_info_df: pd.DataFrame) -> pd.DataFrame:
     num_cols = coint_info_df.shape[1]
@@ -1258,10 +1544,20 @@ def get_half_life_vals(coint_info_df: pd.DataFrame) -> pd.DataFrame:
     halflife_df = pd.DataFrame(halflife_l)
     return halflife_df
 
-pass
 
-# -
-
+# <p>
+# This suggests that cointegration in a six month period is followed by cointegration in another six month in only 16% of the cases.
+# </p>
+# <p>
+# The algorithm for pairs trading is to look back over a six month time period and pick a set of pairs with high correlation and
+# cointegration. The weight from this calculation is used to create a time series moving forward. When the time series is above or below
+# the mean plus or minus some offset, a long-short position is taken in the pair. When the time series returns to the mean, the position is closed.
+# </p>
+# <p>
+# The underlying assumption is that the time series is stationary over the trading period. This stationarity should show up as cointegration
+# in the time period moving forward. This experiment suggests that this stability may exist in only a minority of cases. This seems to violate
+# the underlying theoretical basis for mean reversion pairs trading.
+# </p>
 #
 
 #
