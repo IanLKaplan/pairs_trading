@@ -1340,6 +1340,11 @@ class CalcPairsCointegration:
 
 class Statistics:
     def __init__(self):
+        # Total correlation greater than or equal to the cutoff
+        self.total_correlation = 0
+        # Total for serial correlation where elem_n is greater than or equal to the cutoff
+        # and elem_n_1 is greater than or equal to cutoff 2
+        self.serial_correlation = 0
         # Total pairs - the size of the data frame: shape[0] * shape[1]
         self.total_pairs: int = 0
         # Total number of pairs that have Granger cointegration
@@ -1394,8 +1399,9 @@ class Statistics:
 
 
 class CalcStatistics:
-    def __init__(self, cutoff: float) -> None:
+    def __init__(self, cutoff: float, cutoff_2: float) -> None:
         self.cutoff = cutoff
+        self.cutoff_2 = cutoff_2
 
     def negative_correlation(self,
                              correlation_n: float,
@@ -1485,13 +1491,18 @@ class CalcStatistics:
         is_n_1_granger_coint = elem_n_1_granger.confidence > 0
         elem_n_1_johansen = elem_n_1_coint.johansen_coint
         is_n_1_johansen_coint = elem_n_1_johansen.confidence > 0
-        if correlation_n < -self.cutoff:
+        if correlation_n <= -self.cutoff:
             self.negative_correlation(correlation_n,
                                       is_n_granger_coint,
                                       is_n_johansen_coint,
                                       is_n_1_granger_coint,
                                       is_n_1_johansen_coint,
                                       stats)
+        elif correlation_n >= self.cutoff:
+            stats.total_correlation += 1
+            correlation_n_1 = elem_n_1_tuple[0]
+            if correlation_n_1 >= self.cutoff_2:
+                stats.serial_correlation += 1
         self.add_coint_stats(correlation_n,
                              is_n_granger_coint,
                              is_n_johansen_coint,
@@ -1519,7 +1530,7 @@ class CalcStatistics:
 cointegration_calc = CalcPairsCointegration(close_prices_df=close_prices_df)
 coint_info_df = cointegration_calc.calc_pairs_coint_dataframe(corr_df=corr_df, window=half_year)
 
-calc_statistics = CalcStatistics(cutoff=correlation_cutoff)
+calc_statistics = CalcStatistics(cutoff=correlation_cutoff, cutoff_2=correlation_cutoff-0.10)
 stats = calc_statistics.traverse(coint_info_df=coint_info_df)
 pass
 
