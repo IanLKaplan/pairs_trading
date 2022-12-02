@@ -31,10 +31,13 @@ class MarketData:
             close_data: pd.DataFrame = panel_data[data_col]
         else:
             close_data = pd.DataFrame()
-        close_data = close_data.round(2)
-        close_data_df = pd.DataFrame(close_data)
-        index = pd.to_datetime(close_data_df.index.strftime('%Y-%m-%d'))
-        close_data_df.index = index
+        if close_data.shape[0] > 0:
+            close_data = close_data.round(2)
+            close_data_df = pd.DataFrame(close_data)
+            index = pd.to_datetime(close_data_df.index.strftime('%Y-%m-%d'))
+            close_data_df.index = index
+        else:
+            close_data_df = pd.DataFrame()
         return close_data_df
 
     def symbol_file_path(self, symbol: str) -> str:

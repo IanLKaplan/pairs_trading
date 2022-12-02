@@ -1354,7 +1354,7 @@ class Statistics:
         # A list of correlation values where the value is associated with Granger OR Johansen cointegration
         # The length of this list is the total cointegration number
         self.corr_granger_or_johansen: List = list()
-        # A list of correlation values where the value is associatedwith Granger AND Johansen cointegration
+        # A list of correlation values where the value is associated with Granger AND Johansen cointegration
         self.corr_granger_and_johansen: List = list()
         # Correlation for the in-sample element where there is serial cointegration Granger OR Johansen
         # The length of this list is the total for the serial cointegration
@@ -1491,7 +1491,7 @@ class CalcStatistics:
         is_n_1_granger_coint = elem_n_1_granger.confidence > 0
         elem_n_1_johansen = elem_n_1_coint.johansen_coint
         is_n_1_johansen_coint = elem_n_1_johansen.confidence > 0
-        if correlation_n <= -self.cutoff:
+        if correlation_n <= -(self.cutoff):
             self.negative_correlation(correlation_n,
                                       is_n_granger_coint,
                                       is_n_johansen_coint,
@@ -1532,6 +1532,32 @@ coint_info_df = cointegration_calc.calc_pairs_coint_dataframe(corr_df=corr_df, w
 
 calc_statistics = CalcStatistics(cutoff=correlation_cutoff, cutoff_2=correlation_cutoff-0.10)
 stats = calc_statistics.traverse(coint_info_df=coint_info_df)
+
+correlation_depend_df = pd.DataFrame([stats.total_correlation, stats.serial_correlation]).transpose()
+correlation_depend_df.columns = [f'Total Correlation >= {correlation_cutoff}', f'Serial Correlation >= {correlation_cutoff-0.10}']
+
+print(tabulate(correlation_depend_df, headers=[*correlation_depend_df.columns], tablefmt='fancy_grid'))
+
+correlation_and_cointegration_a = np.array(stats.corr_granger_or_johansen)
+# display_histogram(correlation_and_cointegration_a, 'Correlation', 'Frequency')
+
+correlation_granger_and_johansen_a = np.array(stats.corr_granger_and_johansen)
+display_histogram(correlation_granger_and_johansen_a, 'Correlation with Granger AND Johansen Cointegration', 'Frequency')
+plt.show()
+
+print(f'Total number of pairs with a negative correlation <= -{correlation_cutoff}')
+
+neg_correlation_and_coint_a = np.array(stats.neg_corr_coint)
+display_histogram(neg_correlation_and_coint_a, 'Negative Correlation with Granger OR Johansen Cointegration', 'Frequency')
+plt.show()
+
+correlation_and_serial_coint_a = np.array(stats.serial_coint_corr)
+display_histogram(correlation_and_serial_coint_a, 'Correlation and Serial Cointegration', 'Frequency')
+plt.show()
+
+neg_correlation_and_serial_coint_a = np.array(stats.neg_corr_serial_coint)
+display_histogram(correlation_and_serial_coint_a, 'Negative Correlation and Serial Cointegration', 'Frequency')
+
 pass
 
 # -
