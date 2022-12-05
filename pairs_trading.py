@@ -1340,60 +1340,58 @@ class CalcPairsCointegration:
 
 class Statistics:
     def __init__(self):
-        # Total correlation greater than or equal to the cutoff
+        # Total number of pairs with correlation >= cutoff
         self.total_correlation = 0
         # Total for serial correlation where elem_n is greater than or equal to the cutoff
         # and elem_n_1 is greater than or equal to cutoff 2
         self.serial_correlation = 0
         # Total pairs - the size of the data frame: shape[0] * shape[1]
         self.total_pairs: int = 0
-        # Total number of pairs that have Granger cointegration
-        self.total_granger: int = 0
-        # Total number of pairs that have Johansen cointegration
-        self.total_johansen: int = 0
+        #
+        # Lists for correlation/cointegration distribution
+        #
+        # Correlation with Granger cointegration
+        self.corr_granger: List = list()
+        # Correlation with Johansen cointegration
+        self.corr_johansen: List = list()
         # A list of correlation values where the value is associated with Granger OR Johansen cointegration
         # The length of this list is the total cointegration number
         self.corr_granger_or_johansen: List = list()
         # A list of correlation values where the value is associated with Granger AND Johansen cointegration
         self.corr_granger_and_johansen: List = list()
-        # Correlation for the in-sample element where there is serial cointegration Granger OR Johansen
-        # The length of this list is the total for the serial cointegration
-        self.serial_coint_corr: List = list()
-        # Total number of negative correlation pairs
-        self.total_neg_correlation: int = 0
-        # Negative correlation for the in-sample pair element where there is Granger or Johansen cointegration
-        self.neg_corr_coint: List = list()
-        # Negative correlation for pair with serial correlation
-        self.neg_corr_serial_coint: List = list()
-        # Number of pairs with Granger serial cointegration
-        self.granger_serial_coint: int = 0
-        # Number of pairs with Johansen serial cointegratoin
-        self.johansen_serial_coint: int = 0
-        # Number of pairs with Granger AND Johansen serial cointegration
+        #
+        # Correlation/Cointegration counts
+        #
+        # Total number of pairs that have correlation >= cutoff and Granger cointegration
+        self.total_corr_granger: int = 0
+        # Total number of pairs that have correlation >= cutoff and Johansen cointegration
+        self.total_corr_johansen: int = 0
+        # Total number of pairs that have correlation >= cutoff and Granger OR Johansen cointegration
+        self.total_corr_granger_or_johansen = 0
+        # Total number of pairs that have correlation >= cutoff and Granger ANd Johansen cointegration
+        self.total_corr_granger_and_johansen = 0
+        #
+        # Serial cointegration
+        #
+        # Number of pairs with in-sample correlation >= cutoff, in-sample granger and serial cointegration
+        self.corr_granger_serial_coint: int = 0
+        # Number of pairs with in-sample correlation >= cutoff, in-smaple Johansen and serial cointegratoin
+        self.corr_johansen_serial_coint: int = 0
+        # Number of pairs with in-sample correlation >= cutoff, in-sample Granger or Johansen and serial cointegration
+        self.granger_or_johansen_serial_coint: int = 0
+        # Number of pairs with in-sample correlation >= cutoff, in-sample Granger AND Johansen and serial cointegration
         self.granger_and_johansen_serial_coint: int = 0
-        # Total granger coint pairs with 90% confidence
-        self.granger_total_conf_90: int = 0
-        # Total granger coint pairs with 95% confidence
-        self.granger_total_conf_95: int = 0
-        # Total granger coint pairs with 99% confidence
-        self.granger_total_conf_99: int = 0
-        # Total johansen coint pairs with 90% confidence
-        self.johansen_total_conf_90: int = 0
-        # Total johansen coint pairs with 95% confidence
-        self.johansen_total_conf_95: int = 0
-        # Total johansen coint pairs with 99% confidence
-        self.johansen_total_conf_99: int = 0
-        # Number of Granger coint pairs with 90% confidence that are serially cointegrated
+        # Number of pairs with correlation >= cutoff, in-sample granger = 90 and serial cointegrated
         self.granger_serial_coint_90: int = 0
-        # Number of Granger coint pairs with 95% confidence that are serially cointegrated
+        # Number of pairs with correlation >= cutoff, in-sample granger = 95 and serial cointegrated
         self.granger_serial_coint_95: int = 0
-        # Number of Granger coint pairs with 99% confidence that are serially cointegrated
+        # Number of pairs with correlation >= cutoff, in-sample granger = 99 and serial cointegrated
         self.granger_serial_coint_99: int = 0
-        # Number of Johansen coint pairs with 90% confidence that are serially cointegrated
+        # Number of pairs with correlation >= cutoff, in-sample johansen = 90 and serial cointegrated
         self.johansen_serial_coint_90: int = 0
-        # Number of Johansen coint pairs with 95% confidence that are serially cointegrated
+        # Number of pairs with correlation >= cutoff, in-sample johansen = 95 and serial cointegrated
         self.johansen_serial_coint_95: int = 0
-        # Number of Johansen coint pairs with 99% confidence that are serially cointegrated
+        # Number of pairs with correlation >= cutoff, in-sample johansen = 99 and serial cointegrated
         self.johansen_serial_coint_99: int = 0
 
 
@@ -1403,81 +1401,87 @@ class CalcStatistics:
         self.cutoff = cutoff
         self.cutoff_2 = cutoff_2
 
-    def negative_correlation(self,
-                             correlation_n: float,
-                             is_n_granger_coint: bool,
-                             is_n_johansen_coint: bool,
-                             is_n_1_granger_coint: bool,
-                             is_n_1_johansen_coint: bool,
-                             stats: Statistics) -> None:
-        stats.total_neg_correlation += 1
-        is_n_either_coint = is_n_granger_coint or is_n_johansen_coint
-        is_n_1_either_coint = is_n_1_granger_coint or is_n_1_johansen_coint
-        if is_n_either_coint:
-            stats.neg_corr_coint.append(correlation_n)
-            if is_n_1_either_coint:
-                stats.neg_corr_serial_coint.append(correlation_n)
-
     def add_coint_stats(self,
                         correlation_n: float,
                         is_n_granger_coint: bool,
                         is_n_johansen_coint: bool,
-                        is_n_1_granger_coint: bool,
-                        is_n_1_johansen_coint: bool,
                         stats: Statistics) -> None:
+        """
+        Collect the relationship between Granger and Johansen cointegration and correlation
+        in the in-sample data.
+        :param correlation_n: The correlation for the in-sample data
+        :param is_n_granger_coint: whether the in-sample data shows Granger cointegration
+        :param is_n_johansen_coint: whether the in-smaple data shows Johansen cointegration
+        :param stats: the statistics object
+        :return: nothing
+        """
         is_n_either_coint = is_n_granger_coint or is_n_johansen_coint
         is_n_both_coint = is_n_granger_coint and is_n_johansen_coint
-        is_n_1_either_coint = is_n_1_granger_coint or is_n_1_johansen_coint
-        is_n_1_both_coint = is_n_1_granger_coint and is_n_1_johansen_coint
         if is_n_granger_coint:
-            stats.total_granger += 1
+            stats.corr_granger.append(correlation_n)
         if is_n_johansen_coint:
-            stats.total_johansen += 1
+            stats.corr_johansen.append(correlation_n)
         if is_n_either_coint:
             stats.corr_granger_or_johansen.append(correlation_n)
         if is_n_both_coint:
             stats.corr_granger_and_johansen.append(correlation_n)
-        if is_n_either_coint and is_n_1_either_coint:
-            stats.serial_coint_corr.append(correlation_n)
-        if is_n_granger_coint and is_n_1_granger_coint:
-            stats.granger_serial_coint += 1
-        if is_n_johansen_coint and is_n_1_johansen_coint:
-            stats.johansen_serial_coint += 1
-        if is_n_both_coint and is_n_1_both_coint:
-            stats.granger_and_johansen_serial_coint += 1
 
-    def confidence_stats(self, elem_n_coint: CointAnalysisResult, elem_n_1_coint: CointAnalysisResult, stats: Statistics) -> None:
+    def correlation_and_cointegration(self,
+                                      is_n_granger_coint: bool,
+                                      is_n_johansen_coint: bool,
+                                      is_n_1_granger_coint: bool,
+                                      is_n_1_johansen_coint: bool,
+                                      stats: Statistics) -> None:
+        n_1_cointegration = is_n_1_granger_coint or is_n_1_johansen_coint
+        # Total number of pairs that have correlation >= cutoff and Granger cointegration
+        if is_n_granger_coint:
+            stats.total_corr_granger += 1
+            # Number of pairs with in-smaple correlation >= cutoff, in-sample granger and serial cointegration
+            if n_1_cointegration:
+                stats.corr_granger_serial_coint += 1
+        # Total number of pairs that have correlation >= cutoff and Johansen cointegration
+        if is_n_johansen_coint:
+            stats.total_corr_johansen += 1
+            if n_1_cointegration:
+                # Number of pairs with in-sample correlation >= cutoff, in-smaple Johansen and serial cointegratoin
+                stats.corr_johansen_serial_coint += 1
+        # Total number of pairs that have correlation >= cutoff and Granger OR Johansen cointegration
+        if is_n_granger_coint or is_n_johansen_coint:
+            stats.total_corr_granger_or_johansen += 1
+            if n_1_cointegration:
+                # Number of pairs with in-sample correlation >= cutoff, in-sample Granger or Johansen and serial cointegration
+                stats.granger_or_johansen_serial_coint += 1
+        if is_n_granger_coint and is_n_johansen_coint:
+            stats.total_corr_granger_and_johansen += 1
+            if n_1_cointegration:
+                # Number of pairs with in-sample correlation >= cutoff, in-sample Granger AND Johansen and serial cointegration
+                stats.granger_and_johansen_serial_coint += 1
+
+
+    def confidence_stats(self, elem_n_coint: CointAnalysisResult,
+                         elem_n_1_coint: CointAnalysisResult,
+                         stats: Statistics) -> None:
         granger_n_conf: int = elem_n_coint.granger_coint.confidence
         granger_n_1_conf: int = elem_n_1_coint.granger_coint.confidence
         johansen_n_conf: int = elem_n_coint.johansen_coint.confidence
         johansen_n_1_conf: int = elem_n_1_coint.johansen_coint.confidence
         either_n_1_coint = granger_n_1_conf > 0 or johansen_n_1_conf > 0
-        match granger_n_conf:
-            case 10:
-                stats.granger_total_conf_90 += 1
-                if either_n_1_coint:
-                    stats.granger_serial_coint_90 += 1
-            case 5:
-                stats.granger_total_conf_95 += 1
-                if either_n_1_coint:
-                    stats.granger_serial_coint_95 += 1
-            case 1:
-                stats.granger_total_conf_99 += 1
-                if either_n_1_coint:
-                    stats.granger_serial_coint_99 += 1
-        match johansen_n_conf:
-            case 10:
-                stats.johansen_total_conf_90 += 1
-                if either_n_1_coint:
-                    stats.johansen_serial_coint_90 += 1
-            case 5:
-                stats.johansen_total_conf_95 += 1
-                if either_n_1_coint:
-                    stats.johansen_serial_coint_95 += 1
-            case 1:
-                stats.johansen_total_conf_99 += 1
-                if either_n_1_coint:
-                    stats.johansen_serial_coint_99 += 1
+        if either_n_1_coint:
+            match granger_n_conf:
+              case 10:
+                # Number of pairs with correlation >= cutoff, in-sample granger = 90 and serial cointegrated
+                stats.granger_serial_coint_90 += 1
+              case 5:
+                stats.granger_serial_coint_95 += 1
+              case 1:
+                 stats.granger_serial_coint_99 += 1
+            match johansen_n_conf:
+              case 10:
+                 stats.johansen_serial_coint_90 += 1
+              case 5:
+                  stats.johansen_serial_coint_95 += 1
+              case 1:
+                  stats.johansen_serial_coint_99 += 1
 
     def col_stats(self, elem_n_tuple: Tuple, elem_n_1_tuple: Tuple, rows: int, row_ix: int, stats: Statistics) -> None:
         correlation_n = elem_n_tuple[0]
@@ -1485,31 +1489,28 @@ class CalcStatistics:
         elem_n_1_coint: CointAnalysisResult = elem_n_1_tuple[1]
         elem_n_granger = elem_n_coint.granger_coint
         is_n_granger_coint = elem_n_granger.confidence > 0
-        elem_n_johansen = elem_n_coint.johansen_coint
-        is_n_johansen_coint = elem_n_johansen.confidence > 0
         elem_n_1_granger = elem_n_1_coint.granger_coint
         is_n_1_granger_coint = elem_n_1_granger.confidence > 0
+        #
+        elem_n_johansen = elem_n_coint.johansen_coint
+        is_n_johansen_coint = elem_n_johansen.confidence > 0
         elem_n_1_johansen = elem_n_1_coint.johansen_coint
         is_n_1_johansen_coint = elem_n_1_johansen.confidence > 0
-        if correlation_n <= -(self.cutoff):
-            self.negative_correlation(correlation_n,
-                                      is_n_granger_coint,
-                                      is_n_johansen_coint,
-                                      is_n_1_granger_coint,
-                                      is_n_1_johansen_coint,
-                                      stats)
-        elif correlation_n >= self.cutoff:
+        self.add_coint_stats(correlation_n,
+                             is_n_granger_coint,
+                             is_n_johansen_coint,
+                             stats)
+        if correlation_n >= self.cutoff:
             stats.total_correlation += 1
             correlation_n_1 = elem_n_1_tuple[0]
             if correlation_n_1 >= self.cutoff_2:
                 stats.serial_correlation += 1
-        self.add_coint_stats(correlation_n,
-                             is_n_granger_coint,
-                             is_n_johansen_coint,
-                             is_n_1_granger_coint,
-                             is_n_1_johansen_coint,
-                             stats)
-        self.confidence_stats(elem_n_coint, elem_n_1_coint, stats)
+            self.correlation_and_cointegration(is_n_granger_coint,
+                                               is_n_johansen_coint,
+                                               is_n_1_granger_coint,
+                                               is_n_1_johansen_coint,
+                                               stats)
+            self.confidence_stats(elem_n_coint, elem_n_1_coint, stats)
 
 
     def traverse(self, coint_info_df: pd.DataFrame) -> Statistics:
@@ -1538,25 +1539,64 @@ correlation_depend_df.columns = [f'Total Correlation >= {correlation_cutoff}', f
 
 print(tabulate(correlation_depend_df, headers=[*correlation_depend_df.columns], tablefmt='fancy_grid'))
 
-correlation_and_cointegration_a = np.array(stats.corr_granger_or_johansen)
-# display_histogram(correlation_and_cointegration_a, 'Correlation', 'Frequency')
+correlation_granger_or_johansen_a = np.array(stats.corr_granger_or_johansen)
+display_histogram(correlation_granger_or_johansen_a, 'Correlation vs Granger or Johansen Cointegration', 'Frequency')
+
+correlation_granger_a = np.array(stats.corr_granger)
+display_histogram(correlation_granger_a, 'Correlation vs Granger Cointegration', 'Frequency')
+
+correlation_johansen_a = np.array(stats.corr_johansen)
+display_histogram(correlation_granger_a, 'Correlation vs Johansen Cointegration', 'Frequency')
 
 correlation_granger_and_johansen_a = np.array(stats.corr_granger_and_johansen)
 display_histogram(correlation_granger_and_johansen_a, 'Correlation with Granger AND Johansen Cointegration', 'Frequency')
 plt.show()
 
-print(f'Total number of pairs with a negative correlation <= -{correlation_cutoff}')
+coint_totals = np.array([# Total number of pairs that have correlation >= cutoff and Granger cointegration
+            stats.total_corr_granger,
+            # Total number of pairs that have correlation >= cutoff and Johansen cointegration
+            stats.total_corr_johansen,
+            # Total number of pairs that have correlation >= cutoff and Granger OR Johansen cointegration
+            stats.total_corr_granger_or_johansen,
+            # Total number of pairs that have correlation >= cutoff and Granger ANd Johansen cointegration
+            stats.total_corr_granger_and_johansen
+           ])
+serial_coint = np.array([# Number of pairs with in-sample correlation >= cutoff, in-sample granger and serial cointegration
+            stats.corr_granger_serial_coint,
+            # Number of pairs with in-sample correlation >= cutoff, in-smaple Johansen and serial cointegratoin
+            stats.corr_johansen_serial_coint,
+            # Number of pairs with in-sample correlation >= cutoff, in-sample Granger or Johansen and serial cointegration
+            stats.granger_or_johansen_serial_coint,
+            # Number of pairs with in-sample correlation >= cutoff, in-sample Granger AND Johansen and serial cointegration
+            stats.granger_and_johansen_serial_coint
+            ])
 
-neg_correlation_and_coint_a = np.array(stats.neg_corr_coint)
-display_histogram(neg_correlation_and_coint_a, 'Negative Correlation with Granger OR Johansen Cointegration', 'Frequency')
-plt.show()
+coint_percent = ((serial_coint / coint_totals) * 100).round(2)
 
-correlation_and_serial_coint_a = np.array(stats.serial_coint_corr)
-display_histogram(correlation_and_serial_coint_a, 'Correlation and Serial Cointegration', 'Frequency')
-plt.show()
+coint_stats_df = pd.DataFrame([coint_totals, serial_coint, coint_percent]).transpose()
+coint_stats_df.columns = ['Coint Total', 'Serial Coint', 'Percent']
+coint_stats_df.index = ['Granger', 'Johansen', 'Granger or Johansen', 'Granger and Johansen']
 
-neg_correlation_and_serial_coint_a = np.array(stats.neg_corr_serial_coint)
-display_histogram(correlation_and_serial_coint_a, 'Negative Correlation and Serial Cointegration', 'Frequency')
+print(tabulate(coint_stats_df, headers=[*coint_stats_df.columns], tablefmt='fancy_grid'))
+
+granger_conf_a = np.array([ # Number of pairs with correlation >= cutoff, in-sample granger = 90 and serial cointegrated
+                            stats.granger_serial_coint_90,
+                            # Number of pairs with correlation >= cutoff, in-sample granger = 95 and serial cointegrated
+                            stats.granger_serial_coint_95,
+                            # Number of pairs with correlation >= cutoff, in-sample granger = 99 and serial cointegrated
+                            stats.granger_serial_coint_99,
+                            # Number of pairs with correlation >= cutoff, in-sample johansen = 90 and serial cointegrated
+                            stats.johansen_serial_coint_90,
+                            # Number of pairs with correlation >= cutoff, in-sample johansen = 95 and serial cointegrated
+                            stats.johansen_serial_coint_95,
+                            # Number of pairs with correlation >= cutoff, in-sample johansen = 99 and serial cointegrated
+                            stats.johansen_serial_coint_99 ])
+
+coint_conf_df = pd.DataFrame(granger_conf_a)
+coint_conf_df.columns = ['Cointegration']
+coint_conf_df.index = ['Granger 90%', 'Granger 95%', 'Granger 99%', 'Johansen 90', 'Johansen 95', 'Johansen 99' ]
+
+print(tabulate(coint_conf_df, headers=[*coint_conf_df.columns], tablefmt='fancy_grid'))
 
 pass
 
