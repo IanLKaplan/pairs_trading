@@ -213,7 +213,7 @@
 import os
 from datetime import datetime
 from multiprocessing import Pool
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -1347,6 +1347,8 @@ class Statistics:
         self.serial_correlation = 0
         # Total pairs - the size of the data frame: shape[0] * shape[1]
         self.total_pairs: int = 0
+        # Serial cointegrated pairs count by time period
+        self.pair_count_df = pd.DataFrame()
         #
         # Lists for correlation/cointegration distribution
         #
@@ -1381,16 +1383,28 @@ class Statistics:
         self.granger_or_johansen_serial_coint: int = 0
         # Number of pairs with in-sample correlation >= cutoff, in-sample Granger AND Johansen and serial cointegration
         self.granger_and_johansen_serial_coint: int = 0
+        # Number of pairs with correlation >= cutoff and in-sample granger = 90
+        self.granger_coint_90: int = 0;
         # Number of pairs with correlation >= cutoff, in-sample granger = 90 and serial cointegrated
         self.granger_serial_coint_90: int = 0
+        # Number of pairs with correlation >= cutoff and in-sample granger = 95
+        self.granger_coint_95: int = 0;
         # Number of pairs with correlation >= cutoff, in-sample granger = 95 and serial cointegrated
         self.granger_serial_coint_95: int = 0
+        # Number of pairs with correlation >= cutoff and in-sample granger = 99
+        self.granger_coint_99: int = 0;
         # Number of pairs with correlation >= cutoff, in-sample granger = 99 and serial cointegrated
         self.granger_serial_coint_99: int = 0
+        # Number of pairs with correlation >= cutoff and in-sample Johansen = 90
+        self.johansen_coint_90: int = 0;
         # Number of pairs with correlation >= cutoff, in-sample johansen = 90 and serial cointegrated
         self.johansen_serial_coint_90: int = 0
+        # Number of pairs with correlation >= cutoff and in-sample Johansen = 95
+        self.johansen_coint_95: int = 0;
         # Number of pairs with correlation >= cutoff, in-sample johansen = 95 and serial cointegrated
         self.johansen_serial_coint_95: int = 0
+        # Number of pairs with correlation >= cutoff and in-sample Johansen = 99
+        self.johansen_coint_99: int = 0;
         # Number of pairs with correlation >= cutoff, in-sample johansen = 99 and serial cointegrated
         self.johansen_serial_coint_99: int = 0
 
@@ -1431,11 +1445,15 @@ class CalcStatistics:
                                       is_n_johansen_coint: bool,
                                       is_n_1_granger_coint: bool,
                                       is_n_1_johansen_coint: bool,
-                                      stats: Statistics) -> None:
+                                      stats: Statistics,
+                                      period,
+                                      pairs_dict: Dict) -> None:
         n_1_cointegration = is_n_1_granger_coint or is_n_1_johansen_coint
         # Total number of pairs that have correlation >= cutoff and Granger cointegration
         if is_n_granger_coint:
             stats.total_corr_granger += 1
+            count: int = pairs_dict[period]
+            pairs_dict[period] = count + 1
             # Number of pairs with in-smaple correlation >= cutoff, in-sample granger and serial cointegration
             if n_1_cointegration:
                 stats.corr_granger_serial_coint += 1
@@ -1466,24 +1484,40 @@ class CalcStatistics:
         johansen_n_conf: int = elem_n_coint.johansen_coint.confidence
         johansen_n_1_conf: int = elem_n_1_coint.johansen_coint.confidence
         either_n_1_coint = granger_n_1_conf > 0 or johansen_n_1_conf > 0
-        if either_n_1_coint:
-            match granger_n_conf:
-              case 10:
-                # Number of pairs with correlation >= cutoff, in-sample granger = 90 and serial cointegrated
-                stats.granger_serial_coint_90 += 1
-              case 5:
-                stats.granger_serial_coint_95 += 1
-              case 1:
-                 stats.granger_serial_coint_99 += 1
-            match johansen_n_conf:
-              case 10:
-                 stats.johansen_serial_coint_90 += 1
-              case 5:
-                  stats.johansen_serial_coint_95 += 1
-              case 1:
-                  stats.johansen_serial_coint_99 += 1
+        match granger_n_conf:
+            case 10:
+                stats.granger_coint_90 += 1
+                if either_n_1_coint:
+                    # Number of pairs with correlation >= cutoff, in-sample granger = 90 and serial cointegrated
+                    stats.granger_serial_coint_90 += 1
+            case 5:
+                stats.granger_coint_95 += 1
+                if either_n_1_coint:
+                    stats.granger_serial_coint_95 += 1
+            case 1:
+                stats.granger_coint_99 += 1
+                if either_n_1_coint:
+                    stats.granger_serial_coint_99 += 1
+        match johansen_n_conf:
+            case 10:
+                stats.johansen_coint_90 += 1
+                if either_n_1_coint:
+                    stats.johansen_serial_coint_90 += 1
+            case 5:
+                stats.johansen_coint_95 += 1
+                if either_n_1_coint:
+                    stats.johansen_serial_coint_95 += 1
+            case 1:
+                stats.johansen_coint_99 += 1
+                if either_n_1_coint:
+                    stats.johansen_serial_coint_99 += 1
 
-    def col_stats(self, elem_n_tuple: Tuple, elem_n_1_tuple: Tuple, rows: int, row_ix: int, stats: Statistics) -> None:
+    def col_stats(self,
+                  elem_n_tuple: Tuple,
+                  elem_n_1_tuple: Tuple,
+                  stats: Statistics,
+                  period,
+                  pairs_dict: Dict) -> None:
         correlation_n = elem_n_tuple[0]
         elem_n_coint: CointAnalysisResult = elem_n_tuple[1]
         elem_n_1_coint: CointAnalysisResult = elem_n_1_tuple[1]
@@ -1509,12 +1543,24 @@ class CalcStatistics:
                                                is_n_johansen_coint,
                                                is_n_1_granger_coint,
                                                is_n_1_johansen_coint,
-                                               stats)
+                                               stats,
+                                               period,
+                                               pairs_dict)
             self.confidence_stats(elem_n_coint, elem_n_1_coint, stats)
+
+
+    def build_pairs_dict(self, coint_info_df: pd.DataFrame) -> Dict:
+        pairs_dict = dict()
+        index = coint_info_df.index
+        for time_stamp in index:
+            pairs_dict[time_stamp]: int = 0
+        return pairs_dict
 
 
     def traverse(self, coint_info_df: pd.DataFrame) -> Statistics:
         stats = Statistics()
+        pairs_dict: Dict = self.build_pairs_dict(coint_info_df)
+        index = coint_info_df.index
         rows = coint_info_df.shape[0]
         cols = coint_info_df.shape[1]
         stats.total_pairs = rows * cols
@@ -1522,7 +1568,13 @@ class CalcStatistics:
             for row_ix in range(rows-1):
                 elem_n_tuple: Tuple = coint_info_df.iloc[row_ix, col_ix]
                 elem_n_1_tuple: Tuple = coint_info_df.iloc[row_ix+1, col_ix]
-                self.col_stats(elem_n_tuple, elem_n_1_tuple, rows, row_ix, stats)
+                period = index[row_ix]
+                self.col_stats(elem_n_tuple, elem_n_1_tuple, stats, period, pairs_dict)
+        counts = pairs_dict.values()
+        pair_count_df = pd.DataFrame(counts)
+        pair_count_df.index = index
+        pair_count_df.columns = ['Pairs Count']
+        stats.pair_count_df = pair_count_df.iloc[:-1]
         return stats
 
 
@@ -1534,8 +1586,9 @@ coint_info_df = cointegration_calc.calc_pairs_coint_dataframe(corr_df=corr_df, w
 calc_statistics = CalcStatistics(cutoff=correlation_cutoff, cutoff_2=correlation_cutoff-0.10)
 stats = calc_statistics.traverse(coint_info_df=coint_info_df)
 
-correlation_depend_df = pd.DataFrame([stats.total_correlation, stats.serial_correlation]).transpose()
-correlation_depend_df.columns = [f'Total Correlation >= {correlation_cutoff}', f'Serial Correlation >= {correlation_cutoff-0.10}']
+correlation_percent = round((stats.serial_correlation/stats.total_correlation) * 100, 2)
+correlation_depend_df = pd.DataFrame([stats.total_correlation, stats.serial_correlation, correlation_percent]).transpose()
+correlation_depend_df.columns = [f'Total Correlation >= {correlation_cutoff}', f'Serial Correlation >= {correlation_cutoff-0.10}', 'percent']
 
 print(tabulate(correlation_depend_df, headers=[*correlation_depend_df.columns], tablefmt='fancy_grid'))
 
@@ -1550,6 +1603,9 @@ display_histogram(correlation_granger_a, 'Correlation vs Johansen Cointegration'
 
 correlation_granger_and_johansen_a = np.array(stats.corr_granger_and_johansen)
 display_histogram(correlation_granger_and_johansen_a, 'Correlation with Granger AND Johansen Cointegration', 'Frequency')
+plt.show()
+
+stats.pair_count_df.plot(kind='bar', figsize=(12,10))
 plt.show()
 
 coint_totals = np.array([# Total number of pairs that have correlation >= cutoff and Granger cointegration
@@ -1579,7 +1635,20 @@ coint_stats_df.index = ['Granger', 'Johansen', 'Granger or Johansen', 'Granger a
 
 print(tabulate(coint_stats_df, headers=[*coint_stats_df.columns], tablefmt='fancy_grid'))
 
-granger_conf_a = np.array([ # Number of pairs with correlation >= cutoff, in-sample granger = 90 and serial cointegrated
+coint_conf_a = np.array([ # Number of pairs with correlation >= cutoff, in-sample granger = 90
+                            stats.granger_coint_90,
+                            # Number of pairs with correlation >= cutoff, in-sample granger = 95
+                            stats.granger_coint_95,
+                            # Number of pairs with correlation >= cutoff, in-sample granger = 99
+                            stats.granger_coint_99,
+                            # Number of pairs with correlation >= cutoff, in-sample johansen = 90
+                            stats.johansen_coint_90,
+                            # Number of pairs with correlation >= cutoff, in-sample johansen = 95
+                            stats.johansen_coint_95,
+                            # Number of pairs with correlation >= cutoff, in-sample johansen = 99
+                            stats.johansen_coint_99 ])
+
+coint_conf_serial_a = np.array([ # Number of pairs with correlation >= cutoff, in-sample granger = 90 and serial cointegrated
                             stats.granger_serial_coint_90,
                             # Number of pairs with correlation >= cutoff, in-sample granger = 95 and serial cointegrated
                             stats.granger_serial_coint_95,
@@ -1592,8 +1661,11 @@ granger_conf_a = np.array([ # Number of pairs with correlation >= cutoff, in-sam
                             # Number of pairs with correlation >= cutoff, in-sample johansen = 99 and serial cointegrated
                             stats.johansen_serial_coint_99 ])
 
-coint_conf_df = pd.DataFrame(granger_conf_a)
-coint_conf_df.columns = ['Cointegration']
+coint_conf_percent = ((coint_conf_serial_a/coint_conf_a) * 100).round(2)
+
+
+coint_conf_df = pd.DataFrame([coint_conf_a, coint_conf_serial_a, coint_conf_percent]).transpose()
+coint_conf_df.columns = ['Cointegration', 'Serial Coint', 'Percent']
 coint_conf_df.index = ['Granger 90%', 'Granger 95%', 'Granger 99%', 'Johansen 90', 'Johansen 95', 'Johansen 99' ]
 
 print(tabulate(coint_conf_df, headers=[*coint_conf_df.columns], tablefmt='fancy_grid'))
