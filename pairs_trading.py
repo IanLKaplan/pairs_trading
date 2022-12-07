@@ -44,7 +44,7 @@
 # combination of both.
 # </p>
 # <p>
-# <i>Definitive Guide to Pairs Trading</i> availabel from <a href="https://hudsonthames.org/">Hudson and Thames</a>
+# <i>Definitive Guide to Pairs Trading</i> available from <a href="https://hudsonthames.org/">Hudson and Thames</a>
 # </p>
 # </blockquote>
 # <p>
@@ -670,7 +670,7 @@ print(tabulate(cor_df, headers=[*cor_df.columns], tablefmt='fancy_grid'))
 
 # <p>
 # Monolithic Power Systems, Inc. (MPWR) stock grew at a rate that was similar to Apple's, although their everall market
-# capitalization is a faction of Apples now. I was unfamiliar with MPWR until I wrote this notebook. Bloomberg's describes
+# capitalization is a faction of Apples now. I was unfamiliar with MPWR until I wrote this notebook. Bloomberg describes
 # MPWR's business as:
 # </p>
 # <blockquote>
@@ -1096,167 +1096,7 @@ plot_two_ts(data_a=cor_dist_df, data_b=spy_close_df, title=f"Number of pairs wit
 # To the extent that correlation is a predictor for mean reversion, this also suggests that mean reversion statistics may be volatile.
 # </p>
 
-# <h3>
-# Stability of Correlation
-# </h3>
-# <p>
-# For pairs trading to be a profitable strategy the statistics that are observed over a past period must persists into a future period.
-# If a pairs forms a stationary mean reverting time series in a past period, profitable pairs trading relies on this statistics holding
-# over the out-of-sample trading period.
-# </p>
-# <p>
-# In this section I look at whether a strong correlation between pairs makes it likely that there will be a strong correlation in
-# the next time period. This is an important statistic for pairs trading because correlation is related to cointegration. If correlation persists
-# between periods then cointegration and mean reversion are more likely to persist. If correlation does not persist between time periods
-# then cointegration may not be persistent.
-# </p>
-
 # +
-
-# -
-
-# <p>
-# The table below shows the dependence between correlation in the past period and correlation in the next period. The correlation is the
-# past period is at least 0.75. The correlation in the next period is at least 0.60.
-# </p>
-
-# +
-
-
-# -
-
-#
-
-# <h2>
-# Correlation and Cointegration Questions
-# </h2>
-# <ol>
-#  <li>
-#     <p>
-#       Cointegration statistics
-#     </p>
-#     <ul>
-#       <li>
-#         Percentage of pairs with Granger cointegration
-#       </li>
-#       <li>
-#         Percentage of pairs with Johansen cointegeration
-#       </li>
-#       <li>
-#           Percentage of pairs that are Granger AND Johansen cointegrated.
-#       </li>
-#       <li>
-#          Histogram of the correlation value vs Granger OR Johansen cointegration count.
-#       </li>
-#       <li>
-#          Histogram of correlation value vs Granger AND Johansen cointegration count.
-#       </li>
-#     </ul>
-#   </li>
-#   <li>
-#     <p>
-#       Cointegration (mean reversion) stability
-#     </p>
-#     <ul>
-#       <li>
-#          Compared to total cointegration, what is the percentage where there is serial cointegration (Granger OR Johansen)
-#       </li>
-#       <li>
-#          What is the correlation distribution for serial cointegration? Histogram of the in-sample correlation vs the count
-#          of serial correlation.
-#       </li>
-#       <li>
-#          Compared to the total number of pairs with a negative correlation and cointegration, what is the percentage that
-#          has serial correlation.
-#       </li>
-#       <li>
-#          Compared to the total number of pairs with Granger cointegration, what is the percentage with Granger
-#          serial correlation.
-#       </li>
-#       <li>
-#          Compared to the total number of pairs with Johansen cointegration, what is the percentage with Johansen
-#          serial correlation.
-#       </li>
-#       <li>
-#          Compared to the total number of pairs with <i>both</i> Granger and Johansen cointegration, who many pairs have
-#          serial correlation with either Johansen or Granger.
-#       </li>
-#       <li>
-#          <ul>
-#            <li>
-#               For pairs with Granger cointegration with 90% confidence, what is the percentage for serial Granger cointegration.
-#            </li>
-#            <li>
-#               For pairs with Granger cointegration with 95% confidence, what is the percentage for serial Granger cointegration.
-#            </li>
-#            <li>
-#               For pairs with Granger cointegration with 99% confidence, what is the percentage for serial Granger cointegration.
-#            </li>
-#          </ul>
-#       </li>
-#       <li>
-#          <ul>
-#            <li>
-#               For pairs with Johansen cointegration with 90% confidence, what is the percentage for serial Johansen cointegration.
-#            </li>
-#            <li>
-#               For pairs with Johansen cointegration with 95% confidence, what is the percentage for serial Johansen cointegration.
-#            </li>
-#            <li>
-#               For pairs with Johansen cointegration with 99% confidence, what is the percentage for serial Johansen cointegration.
-#            </li>
-#          </ul>
-#       </li>
-#     </ul>
-#   </li>
-# </ol>
-# <h2>
-# Stability of Cointegeration
-# </h2>
-# <p>
-# Cointegration for a pair is calculated over an in-sample look-back period. When a pair is found to be cointegrated, trading takes place
-# in the out-of-sample period. For example, cointegration is calculated over a half year look-back period. Trading, using the cointegration spread,
-# takes place over a three month out-of-sample period following the look-back period.
-# </p>
-# <p>
-# For a cointegrated pair, the spread time series is, in an ideal world, a stationary time series with a constant mean and standard deviation.
-# The spread time series is mean reverting, so that divergences from the mean return to the mean. The statistics of the spread time series,
-# in an ideal world, are consistent between the look-back period and the trading period.
-# </p>
-# <p>
-# In the real world, stock and stock pair behavior is constantly changing.  For pairs trading to succeed in the real world (as opposed to
-# the ideal world), the mean reversion of the spread time series must persist (be stationary) between the look-back period and the trading
-# period often enough to yield a profit.
-# </p>
-# <p>
-# There is no way to know if a pair will remain stationary between the look-back period and the trading period. What can be examined
-# are the historical frequences where there is stationarity between the look-back period and the trading period.
-# </p>
-# <p>
-# There are a limited number of six month time periods. Looking at the stationarity for a single pair would not be statistically
-# significant, but we can look over all 8863 pairs over 32 time periods.
-# </p>
-# <h3>
-# Computation
-# </h3>
-# <p>
-# For every pair the correlation, granger cointegration and johansen cointegeration is calculated. The calculation is very compute intensive
-# and Python is notorious for being slow compared to C++ and Java (Python does, however, have lots of support for statistics and data analysis).
-# I have only succeeded in successfully doing this calculation in a single Python thread.  I tried to use Python's Pool parallelism which would
-# allow me to run the calculation in parallel on the 16-CPU cores on my Linux system. Unfortunately this resulted in a segment fault
-# causing the calculation to fail.
-# </p>
-# <p>
-# The historical calculation is constant (since the historical data is constant). To avoid recalculating the correlation and cointegration
-# data, the values are stored in files. A Pandas DataFrame is constructed from this data.
-# </p>
-# <p>
-# The data in these files can be recalculated by removing the files and running the notebook.
-# </p>
-#
-
-# +
-
 class CalcPairsCointegration:
     def __init__(self, close_prices_df: pd.DataFrame):
         self.close_prices_df = close_prices_df
@@ -1335,7 +1175,6 @@ class CalcPairsCointegration:
             coint_info_df.index = corr_df.index
             self.coint_matrix_io.write_files(coint_info_df)
         return coint_info_df
-
 
 
 class Statistics:
@@ -1579,35 +1418,170 @@ class CalcStatistics:
 
 
 
-
 cointegration_calc = CalcPairsCointegration(close_prices_df=close_prices_df)
 coint_info_df = cointegration_calc.calc_pairs_coint_dataframe(corr_df=corr_df, window=half_year)
 
 calc_statistics = CalcStatistics(cutoff=correlation_cutoff, cutoff_2=correlation_cutoff-0.10)
 stats = calc_statistics.traverse(coint_info_df=coint_info_df)
+# -
 
+# <h2>
+# Correlation Statistics
+# </h2>
+# <p>
+# This section looks at correlation statistics and their relation to cointegration:
+# </p>
+# <ul>
+# <li>
+# <p>
+# Stability of pairs correlation. When there is high pairs correlation (correlation greater than or equal to 0.75) in the past six months,
+# how often is there correlation in the next time period (correlation >= 0.60)?
+# </p>
+# </li>
+# <li>
+# <p>
+# Is pairs correlation related to cointegration? For example, is high correlation related to cointegration?
+# </p>
+# </li>
+# </ul>
+# <h3>
+# Stability of Correlation
+# </h3>
+# <p>
+# For pairs trading to be a profitable strategy the statistics that are observed over a past period must persists into a future period often
+# enough to be profitable.  If a pairs forms a stationary mean reverting time series in a past period, profitable pairs trading relies
+# on this statistic holding over the out-of-sample trading period (often enough to be profitable).
+# </p>
+# <p>
+# In this section I look at whether a strong correlation between pairs makes it likely that there will be a strong correlation in
+# the next time period. This is an important statistic for pairs trading because correlation is related to cointegration. If correlation persists
+# between periods then cointegration and mean reversion are more likely to persist. If correlation does not persist between time periods
+# then cointegration may not be persistent.
+# </p>
+# <p>
+# The table below shows the dependence between correlation in the past period and correlation in the next period. The correlation is the
+# past period is at least 0.75. The correlation in the next period is at least 0.60.
+# </p>
+
+# +
 correlation_percent = round((stats.serial_correlation/stats.total_correlation) * 100, 2)
 correlation_depend_df = pd.DataFrame([stats.total_correlation, stats.serial_correlation, correlation_percent]).transpose()
 correlation_depend_df.columns = [f'Total Correlation >= {correlation_cutoff}', f'Serial Correlation >= {correlation_cutoff-0.10}', 'percent']
 
 print(tabulate(correlation_depend_df, headers=[*correlation_depend_df.columns], tablefmt='fancy_grid'))
+# -
 
-correlation_granger_or_johansen_a = np.array(stats.corr_granger_or_johansen)
-display_histogram(correlation_granger_or_johansen_a, 'Correlation vs Granger or Johansen Cointegration', 'Frequency')
+# <p>
+# As the table above shows, about half (~49%) of the pairs with a high correlation are also highly correlated in the next time period.
+# </p>
+#
+# <h3>
+# Computation
+# </h3>
+# <p>
+# For every pair the correlation, granger cointegration and johansen cointegeration is calculated. The calculation is very compute intensive
+# and Python is notorious for being slow compared to C++ and Java (Python does, however, have lots of support for statistics and data analysis).
+# I have only succeeded in successfully doing this calculation in a single Python thread.  I tried to use Python's Pool parallelism which would
+# allow me to run the calculation in parallel on the 16-CPU cores on my Linux system. Unfortunately this resulted in a segment fault
+# causing the calculation to fail.
+# </p>
+# <p>
+# The historical calculation is constant (since the historical data is constant). To avoid recalculating the correlation and cointegration
+# data, the values are stored in files. A Pandas DataFrame is constructed from this data.
+# </p>
+# <p>
+# The data in these files can be recalculated by removing the files and running the notebook.
+# </p>
+#
+# <h3>
+# Correlation and Cointegration
+# </h3>
+# <p>
+# After filtering for the S&P 500 industry sector, the next filter that is used in pair selection is correlation (i.e., pairs with
+# high correlation are selected for cointegration testing).
+# </p>
+# <p>
+# The histograms below show the replationship between correlation and cointegration, in the same half-year, in-sample period.
+# </p>
 
+# +
 correlation_granger_a = np.array(stats.corr_granger)
 display_histogram(correlation_granger_a, 'Correlation vs Granger Cointegration', 'Frequency')
 
 correlation_johansen_a = np.array(stats.corr_johansen)
 display_histogram(correlation_granger_a, 'Correlation vs Johansen Cointegration', 'Frequency')
 
+correlation_and_cointegration_a = np.array(stats.corr_granger_or_johansen)
+display_histogram(correlation_and_cointegration_a, 'Correlation with Granger OR Johansen Cointegration', 'Frequency')
+# -
+
+# <p>
+# The histogram plot above shows that there is a strong relationship between correlation and cointegration. That is, highly correlated
+# pairs are more likely to be cointegerated.
+# </p>
+# <p>
+# The histogram also shows that there are cointegration is much more common with higher positive correlation.
+# </p>
+# <p>
+# The histogram below shows the replationship between correlation and cointegration where cointegration meets both the Granger
+# and Johansen tests (e.g., Granger AND Johansen cointegration).
+# </p>
+
+# +
+
 correlation_granger_and_johansen_a = np.array(stats.corr_granger_and_johansen)
 display_histogram(correlation_granger_and_johansen_a, 'Correlation with Granger AND Johansen Cointegration', 'Frequency')
-plt.show()
+
+
+# -
+
+#
+# <p>
+# The histograms above show that correlation is an effective first filter for cointegration.
+# </p>
+# <p>
+# The histogram below shows the number of pairs that are highly correlated with Granger cointegration for each in-sample
+# time period.
+# </p>
 
 stats.pair_count_df.plot(kind='bar', figsize=(12,10))
-plt.show()
 
+# <p>
+# As we have seen, correlation increases in market crashes. The histogram above suggests that cointegration increases as well.
+# </p>
+#
+# <h2>
+# Stability of Cointegeration
+# </h2>
+# <p>
+# Cointegration for a pair is calculated over an in-sample look-back period. When a pair is found to be cointegrated, trading takes place
+# in the out-of-sample period. For example, cointegration is calculated over a half year look-back period. Trading, using the cointegration spread,
+# takes place over a three month out-of-sample period following the look-back period.
+# </p>
+# <p>
+# For a cointegrated pair, the spread time series is, in an ideal world, a stationary time series with a constant mean and standard deviation.
+# The spread time series is mean reverting, so that divergences from the mean return to the mean. The statistics of the spread time series,
+# in an ideal world, are consistent between the look-back period and the trading period.
+# </p>
+# <p>
+# In the real world, stock and stock pair behavior is constantly changing.  For pairs trading to succeed in the real world (as opposed to
+# the ideal world), the mean reversion of the spread time series must persist (be stationary) between the look-back period and the trading
+# period often enough to yield a profit.
+# </p>
+# <p>
+# There is no way to know if a pair will remain stationary between the look-back period and the trading period. What can be examined
+# are the historical frequences where there is stationarity between the look-back period and the trading period.
+# </p>
+# <p>
+# There are a limited number of six month time periods. Looking at the stationarity for a single pair would not be statistically
+# significant, but we can look over all 8863 pairs over 32 time periods.
+# </p>
+# <p>
+# The histogram below shows the relationship between past correlation and serial cointegration. Here cointegration is either Granger
+# or Johansen cointegration.
+# </p>
+
+# +
 coint_totals = np.array([# Total number of pairs that have correlation >= cutoff and Granger cointegration
             stats.total_corr_granger,
             # Total number of pairs that have correlation >= cutoff and Johansen cointegration
@@ -1632,6 +1606,14 @@ coint_percent = ((serial_coint / coint_totals) * 100).round(2)
 coint_stats_df = pd.DataFrame([coint_totals, serial_coint, coint_percent]).transpose()
 coint_stats_df.columns = ['Coint Total', 'Serial Coint', 'Percent']
 coint_stats_df.index = ['Granger', 'Johansen', 'Granger or Johansen', 'Granger and Johansen']
+
+# -
+
+# The table below shows the relationship between cointegration in the in-sample six month period and cointegration in the six month out of
+# sample (trading) period.
+
+# +
+
 
 print(tabulate(coint_stats_df, headers=[*coint_stats_df.columns], tablefmt='fancy_grid'))
 
@@ -1668,45 +1650,188 @@ coint_conf_df = pd.DataFrame([coint_conf_a, coint_conf_serial_a, coint_conf_perc
 coint_conf_df.columns = ['Cointegration', 'Serial Coint', 'Percent']
 coint_conf_df.index = ['Granger 90%', 'Granger 95%', 'Granger 99%', 'Johansen 90', 'Johansen 95', 'Johansen 99' ]
 
-print(tabulate(coint_conf_df, headers=[*coint_conf_df.columns], tablefmt='fancy_grid'))
+# -
 
+# The table below shows the relationship between the cointegration confidence intervals in the in-sample period and
+# cointegration in the out-of-sample trading period. This table provides information on whether higher confidence
+# in cointegration provides better predictive power for the out-of-sample period.
+
+# +
+
+print(tabulate(coint_conf_df, headers=[*coint_conf_df.columns], tablefmt='fancy_grid'))
+# -
+
+# <h3>
+# Stability of Cointegration: Conclusions
+# </h3>
+# <ul>
+# <li>
+# <p>
+# The Granger and Johansen have close to the same results.
+# </p>
+# </li>
+# <li>
+# <p>
+# Cointegration is persistent about 40% of the time for either Granger or Johansen cointegration, at all of the confidence levels.
+# </p>
+# </li>
+# <li>
+# <p>
+# There are lots of in-sample pairs with high correlation and cointegration to choose from.
+# </p>
+# </li>
+# </ul>
+# <p>
+# Since the Granger and Johansen tests produce very similar results. I prefer the Granger test because it is easier to understand and
+# provides an intercept value, which tends to produce a spread series with a mean of zero. Higher cointegration confidence intervals do
+# not deliver higher serial cointegration, so a simple test for a non-zero confidence interval can be used.
+# </p>
+# <h3>
+# An Algorithm of Selecting Pairs
+# </h3>
+# <p>
+# Based on the statistical observation from the data above, I can propose the following algorithm to select pairs. These criteria
+# are applied to the in-sample data (the past half year). Trading takes place in the next time period (the out-of-sample) period.
+# </p>
+# <p>
+# A three month trading period is used. This time period, rather than a six month time period, is chosen because a shorter time period
+# is more likely to have consistent statistics with the in-sample time period. A shorter time period also allows the statistical tests
+# to be run more often. The shorter time period limits the time that pairs are held. An open pair position that does not mean revert will
+# be closed at the end of the three month trading period.
+# </p>
+# <ol>
+# <li>
+# Filter pairs for high correlation
+# </li>
+# <li>
+# Use the Granger test to identify pairs that are cointegrated (at any confidence level)
+# </li>
+# </ol>
+# <p>
+# After selecting highly correlated, cointegrated pairs there will (historically) be between 700 and 1500 pairs, which are far more than
+# can be traded by a retail trader.  To reduce the number of pairs the following additional filters are applied.
+# </p>
+# <ol>
+# <li>
+# Select the top N pairs by the volatility of the pair spread (sorted by high volatility).
+# </li>
+# <li>
+# Select the top M pairs by halflife of the pair spread (sorted by low halflife).
+# </li>
+# </ol>
+# <p>
+# High volatility pairs are selected based on the speculation that these stocks will yield the highest profit.
+# </p>
+# <p>
+# Pairs with short halflives may have more rapid mean reversion, providing more trading opportunities.
+# </p>
+#
+
+# <h2>
+# Halflife for a Mean Reverting Ornstein – Uhlenbeck Process
+# </h2>
+# <p>
+# A Ornstein – Uhlenbeck process is a random walk process with a tendency to move back toward the mean. Half-life of the mean-reversionis the
+# average time it will take the process to get pulled half-way back to the mean.
+# </p>
+# <p>
+# Cointegration from one time period to the next happens in only about 40% of the cointegrated pairs. This suggests that half-life will also
+# be unstable between time periods.
+# </p>
+
+# +
+
+
+class HalflifeCalculation:
+    def __init__(self, coint_info_df: pd.DataFrame, close_prices_df: pd.DataFrame, correlation_cutoff: float, window: int) -> None:
+        self.coint_info_df = coint_info_df
+        self.close_prices_df = close_prices_df
+        self.window = window
+        self.cutoff = correlation_cutoff
+
+    def half_life(self, spread_a: np.array) -> int:
+        """
+        https://quant.stackexchange.com/questions/25086/calculating-half-life-of-mean-reverting-series-with-python/25119
+        :param spread_a:
+        :return:
+        """
+        spread_lag = np.roll(spread_a, 1)
+        spread_lag[0] = 0
+        spread_ret = spread_a - spread_lag
+        spread_ret[0] = 0
+        # adds intercept terms to X variable for regression
+        spread_lag2 = sm.add_constant(spread_lag)
+        model = sm.OLS(spread_ret, spread_lag2)
+        res = model.fit()
+        halflife_f = -log(2) / res.params[1]
+        halflife_i = int(round(halflife_f))
+        return halflife_i
+
+    def calc_spread(self, coint_info: CointInfo, window_start: int) -> np.array:
+        pair_l = coint_info.pair_str.split(':')
+        asset_a_a = self.close_prices_df[pair_l[0]].iloc[window_start:window_start + self.window].values
+        asset_b_a = self.close_prices_df[pair_l[1]].iloc[window_start:window_start + self.window].values
+        spread_a = asset_a_a - coint_info.intercept - (coint_info.weight * asset_b_a)
+        return spread_a
+
+    def half_life_distribution(self) -> List:
+        """
+        CointInfo(pair_str=granger_pair_str,
+                  confidence=granger_coint.confidence,
+                  weight=granger_coint.weight,
+                  has_intercept=True,
+                  intercept=granger_coint.intercept)
+        :return:
+        """
+        rows = coint_info_df.shape[0]
+        cols = coint_info_df.shape[1]
+        halflife_l = list()
+        pairs = coint_info_df.columns
+        window_start = 0
+        for row_ix in range(rows):
+            for col_ix in range(cols):
+                elem_n_tuple: Tuple = coint_info_df.iloc[row_ix, col_ix]
+                correlation_n = elem_n_tuple[0]
+                if correlation_n >= self.cutoff:
+                    elem_n_coint: CointAnalysisResult = elem_n_tuple[1]
+                    elem_n_granger = elem_n_coint.granger_coint
+                    if elem_n_granger.confidence > 0:
+                        spread_a = self.calc_spread(elem_n_granger, window_start)
+                        half_life = self.half_life(spread_a)
+                        halflife_l.append(half_life)
+            window_start += self.window
+        return halflife_l
+
+
+half_life_calc = HalflifeCalculation(coint_info_df=coint_info_df,
+                                     close_prices_df=close_prices_df,
+                                     correlation_cutoff=correlation_cutoff,
+                                     window=half_year)
+halflife_l = half_life_calc.half_life_distribution()
+halflife_df = pd.DataFrame(halflife_l)
+halflife_df.plot(kind='hist')
 pass
 
 # -
 
-#
-# Cointegration dependence: total number of pairs that are cointegrated and the number of pairs where the next time period is cointegerated.
-
-
-
-def get_half_life_vals(coint_info_df: pd.DataFrame) -> pd.DataFrame:
-    num_cols = coint_info_df.shape[1]
-    num_rows = coint_info_df.shape[0]
-    halflife_l = list()
-    for col_ix in range(num_cols):
-        for row_ix in range(num_rows):
-            obj = coint_info_df.iloc[row_ix, col_ix]
-            if obj[1] is not None:
-                if obj[1].confidence > 0:
-                    halflife_l.append(obj[1].halflife)
-    halflife_df = pd.DataFrame(halflife_l)
-    return halflife_df
-
-
+# <h2>
+# Pairs Trading and the Problems of Mathematical Finance
+# </h2>
 # <p>
-# This suggests that cointegration in a six month period is followed by cointegration in another six month in only 16% of the cases.
+# Mathematical finance often assumes normal distributions and statistics that are constant (constant mean and standard deviation, for example).
+# If the assumptions involving constant statistics were actually true, it would be much easier to make money (except for the fact that mathematical
+# finance would assume that these opportunities would have already been arbitraged out).
 # </p>
 # <p>
-# The algorithm for pairs trading is to look back over a six month time period and pick a set of pairs with high correlation and
-# cointegration. The weight from this calculation is used to create a time series moving forward. When the time series is above or below
-# the mean plus or minus some offset, a long-short position is taken in the pair. When the time series returns to the mean, the position is closed.
+# The statistics examined in this notebook are not constant. There are wide variations in correlation between time periods. Cointegration is also
+# not constant from one time period to another. In fact, in 60% of the cases a pair that is cointegrated in one time period is not cointegrated in
+# the following time period.
 # </p>
 # <p>
-# The underlying assumption is that the time series is stationary over the trading period. This stationarity should show up as cointegration
-# in the time period moving forward. This experiment suggests that this stability may exist in only a minority of cases. This seems to violate
-# the underlying theoretical basis for mean reversion pairs trading.
+# The mathematical finance papers on mean reversion are written for a world where the spread between two mean reverting assets is a stationary
+# Ornstein-Uhlenbeck process. This world may exist looking backward at in-sample data. For out-of-sample data, these statistics break down, as
+# demonstrated in this paper. The statistical characteristics of the past in-sample period often do not describe the out-of-sample trading period.
 # </p>
-#
 
 #
 # <h2>

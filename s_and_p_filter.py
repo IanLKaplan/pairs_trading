@@ -51,6 +51,41 @@ def process_file(path: str, file_name: str) -> pd.DataFrame:
     sector_df['Sector'] = sec_name
     return sector_df
 
+def filter_stocks(s_and_p_df: pd.DataFrame) -> None:
+    """
+    Filter out the higher classes of stock.  If there is a class A, class B and a class C stock, filter out
+    class A and B, leaving class C.
+    :param s_and_p_df:
+    :return:
+    """
+    class_designation = ' Cl '
+    names = s_and_p_df['Name']
+    company_name_dict = dict()
+    for ix, name in enumerate(names):
+        str_ix = name.find(class_designation)
+        if str_ix > 0:
+            company_name = name[:str_ix]
+            class_type = name[str_ix+len(class_designation):].strip()
+            t = (class_type, ix)
+            if company_name not in company_name_dict:
+                company_name_dict[company_name] = list()
+            company_name_dict[company_name].append(t)
+    delete_list = list()
+    for company_name, class_tuple_l in company_name_dict.items():
+        if len(class_tuple_l) > 1:
+            max_tuple = class_tuple_l[0]
+            for i in range(1, len(class_tuple_l)):
+                cur_tuple = class_tuple_l[i]
+                if max_tuple[0] < cur_tuple[0]:
+                    max_tuple = cur_tuple
+                    delete_list.append((company_name, max_tuple[1]))
+                else:
+                    delete_list.append((company_name, cur_tuple[1]))
+    # Get the row index from the name, row index tuple
+    drop_rows = list(list(zip(*delete_list))[1])
+    # Remove any of the stock classes that are less than the maximum (e.g., class A is less than class B)
+    s_and_p_df.drop(index=s_and_p_df.iloc[drop_rows].index.tolist(), inplace=True)
+
 
 def process_files(path: str) -> pd.DataFrame:
     s_and_p_df = pd.DataFrame()
@@ -60,6 +95,7 @@ def process_files(path: str) -> pd.DataFrame:
             if prefix == 'sp-sectors---':
                 sector_df = process_file(path, file_name)
                 s_and_p_df = pd.concat([s_and_p_df, sector_df], axis=0)
+        filter_stocks(s_and_p_df)
         s_and_p_df.index = range(0, s_and_p_df.shape[0])
         s_and_p_df.to_csv(path + os.path.sep + output_file_name)
     else:
