@@ -1774,7 +1774,7 @@ class HalflifeCalculation:
         spread_a = asset_a_a - coint_info.intercept - (coint_info.weight * asset_b_a)
         return spread_a
 
-    def half_life_distribution(self) -> List:
+    def half_life_distribution(self) -> np.array:
         """
         CointInfo(pair_str=granger_pair_str,
                   confidence=granger_coint.confidence,
@@ -1798,18 +1798,26 @@ class HalflifeCalculation:
                     if elem_n_granger.confidence > 0:
                         spread_a = self.calc_spread(elem_n_granger, window_start)
                         half_life = self.half_life(spread_a)
-                        halflife_l.append(half_life)
+                        if half_life > 0:
+                            halflife_l.append(half_life)
             window_start += self.window
-        return halflife_l
+        halflife_a = np.array(halflife_l)
+        halflife_std = np.std(halflife_a)
+        # All halflife values will be grater than zero. Filter out halflife values that are over
+        # 8 standard deviations out.
+        halflife_filter = halflife_a <= (8 * halflife_std)
+        halflife_filtered_a = halflife_a[halflife_filter]
+        return halflife_filtered_a
 
 
 half_life_calc = HalflifeCalculation(coint_info_df=coint_info_df,
                                      close_prices_df=close_prices_df,
                                      correlation_cutoff=correlation_cutoff,
                                      window=half_year)
-halflife_l = half_life_calc.half_life_distribution()
-halflife_df = pd.DataFrame(halflife_l)
-halflife_df.plot(kind='hist')
+halflife_a = half_life_calc.half_life_distribution()
+halflife_df = pd.DataFrame(halflife_a)
+halflife_df.columns = ['Spread Halflife']
+halflife_df.plot(kind='hist', xlabel='Spread Half-life', figsize=(10, 6))
 pass
 
 # -
