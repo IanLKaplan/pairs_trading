@@ -11,7 +11,7 @@ import pandas as pd
 # and the sector.
 #
 s_and_p_directory = 's_and_p_sector_components'
-output_file_name = 'sp_stocks.csv'
+s_and_p_stock_file = 'sp_stocks.csv'
 
 
 def get_sector_name(file_name: str) -> str:
@@ -55,6 +55,14 @@ def filter_stocks(s_and_p_df: pd.DataFrame) -> None:
     """
     Filter out the higher classes of stock.  If there is a class A, class B and a class C stock, filter out
     class A and B, leaving class C.
+
+    For example, the class A stocks are dropped because they are not commonly traded. Even if they are traded
+    they overlap with the lower class (e.g., class B or C).
+
+    Symbol           Name                  Sector
+    FOXA  Fox Corp Cl A  communication-services
+    GOOGL  Alphabet Cl A  communication-services
+    NWSA   News Cp Cl A  communication-services
     :param s_and_p_df:
     :return:
     """
@@ -95,9 +103,11 @@ def process_files(path: str) -> pd.DataFrame:
             if prefix == 'sp-sectors---':
                 sector_df = process_file(path, file_name)
                 s_and_p_df = pd.concat([s_and_p_df, sector_df], axis=0)
+        # serially renumber the DataFrame index
+        s_and_p_df.index = range(0, s_and_p_df.shape[0])
         filter_stocks(s_and_p_df)
         s_and_p_df.index = range(0, s_and_p_df.shape[0])
-        s_and_p_df.to_csv(path + os.path.sep + output_file_name)
+        s_and_p_df.to_csv(path + os.path.sep + s_and_p_stock_file)
     else:
         print(f'Could not read {path}')
     return s_and_p_df

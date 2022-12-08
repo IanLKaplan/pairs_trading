@@ -6,467 +6,497 @@
 4,BALL,Ball Corporation,materials
 5,CE,Celanese Corp,materials
 6,CF,Cf Industries Holdings,materials
-7,DD,Dupont Denemours Inc,materials
-8,ECL,Ecolab Inc,materials
-9,EMN,Eastman Chemical Company,materials
-10,FCX,Freeport-Mcmoran Inc,materials
-11,FMC,FMC Corp,materials
-12,IFF,International Flavors & Fragrances,materials
-13,IP,International Paper Company,materials
-14,LIN,Linde Plc,materials
-15,MLM,Martin Marietta Materials,materials
-16,MOS,Mosaic Company,materials
-17,NEM,Newmont Mining Corp,materials
-18,NUE,Nucor Corp,materials
-19,PKG,Packaging Corp of America,materials
-20,PPG,PPG Industries,materials
-21,SEE,Sealed Air Corp,materials
-22,SHW,Sherwin-Williams Company,materials
-23,VMC,Vulcan Materials Company,materials
-24,WRK,Westrock Company,materials
-25,AAPL,Apple Inc,information-technology
-26,ACN,Accenture Plc,information-technology
-27,ADBE,Adobe Systems Inc,information-technology
-28,ADI,Analog Devices,information-technology
-29,ADP,Automatic Data Procs,information-technology
-30,ADSK,Autodesk Inc,information-technology
-31,AKAM,Akamai Technologies,information-technology
-32,AMD,Adv Micro Devices,information-technology
-33,ANSS,Ansys Inc,information-technology
-34,APH,Amphenol Corp,information-technology
-35,AVGO,Broadcom Ltd,information-technology
-36,BR,Broadridge Financial Solutions Llc,information-technology
-37,CDAY,Ceridian Hcm Holding Inc,information-technology
-38,CDNS,Cadence Design Sys,information-technology
-39,CDW,CDW Corp,information-technology
-40,CSCO,Cisco Systems Inc,information-technology
-41,CTSH,Cognizant Tech Sol,information-technology
-42,CTXS,Citrix Systems Inc,information-technology
-43,DXC,Dxc Technology Company,information-technology
-44,ENPH,Enphase Energy Inc,information-technology
-45,EPAM,Epam Systems Inc,information-technology
-46,FFIV,F5 Inc,information-technology
-47,FIS,Fidelity National Information Services,information-technology
-48,FISV,Fiserv Inc,information-technology
-49,FLT,Fleetcor Technologies,information-technology
-50,FTNT,Fortinet Inc,information-technology
-51,GLW,Corning Inc,information-technology
-52,GPN,Global Payments Inc,information-technology
-53,HPE,Hewlett Packard Enterprise Comp,information-technology
-54,HPQ,HP Inc,information-technology
-55,IBM,International Business Machines,information-technology
-56,INTC,Intel Corp,information-technology
-57,INTU,Intuit Inc,information-technology
-58,IT,Gartner Inc,information-technology
-59,JKHY,Jack Henry & Assoc,information-technology
-60,JNPR,Juniper Networks,information-technology
-61,KEYS,Keysight Technologies Inc Comm,information-technology
-62,KLAC,K L A-Tencor Corp,information-technology
-63,LRCX,Lam Research Corp,information-technology
-64,MA,Mastercard Inc,information-technology
-65,MCHP,Microchip Technology,information-technology
-66,MPWR,Monolithic Power Sys,information-technology
-67,MSFT,Microsoft Corp,information-technology
-68,MSI,Motorola Solutions,information-technology
-69,MU,Micron Technology,information-technology
-70,NLOK,Nortonlifelock Inc,information-technology
-71,NOW,Servicenow Inc,information-technology
-72,NTAP,Netapp Inc,information-technology
-73,NVDA,Nvidia Corp,information-technology
-74,NXPI,Nxp Semiconductors,information-technology
-75,ON,On Semiconductor,information-technology
-76,ORCL,Oracle Corp,information-technology
-77,PAYC,Paycom Software Inc,information-technology
-78,PAYX,Paychex Inc,information-technology
-79,PTC,Ptc Inc,information-technology
-80,PYPL,Paypal Holdings,information-technology
-81,QCOM,Qualcomm Inc,information-technology
-82,QRVO,Qorvo Inc,information-technology
-83,ROP,Roper Industries,information-technology
-84,SEDG,Solaredge Tech,information-technology
-85,SNPS,Synopsys Inc,information-technology
-86,STX,Seagate Technology Hldgs Plc,information-technology
-87,SWKS,Skyworks Solutions,information-technology
-88,TDY,Teledyne Technologies Inc,information-technology
-89,TEL,Te Connectivity Ltd,information-technology
-90,TER,Teradyne Inc,information-technology
-91,TRMB,Trimble Navigation,information-technology
-92,TXN,Texas Instruments,information-technology
-93,TYL,Tyler Technologies,information-technology
-94,V,Visa Inc,information-technology
-95,VRSN,Verisign Inc,information-technology
-96,WDC,Western Digital Cp,information-technology
-97,ZBRA,Zebra Technologies,information-technology
-98,AAP,Advance Auto Parts Inc,consumer-discretionary
-99,AMZN,Amazon.com Inc,consumer-discretionary
-100,APTV,Aptiv Plc,consumer-discretionary
-101,AZO,Autozone,consumer-discretionary
-102,BBWI,Bath & Body Works Inc,consumer-discretionary
-103,BBY,Best Buy Company,consumer-discretionary
-104,BKNG,Booking Holdings Inc,consumer-discretionary
-105,CCL,Carnival Corp,consumer-discretionary
-106,CZR,Caesars Entertainment Inc,consumer-discretionary
-107,DG,Dollar General Corp,consumer-discretionary
-108,DHI,D.R. Horton,consumer-discretionary
-109,DLTR,Dollar Tree Inc,consumer-discretionary
-110,DPZ,Domino's Pizza Inc,consumer-discretionary
-111,DRI,Darden Restaurants,consumer-discretionary
-112,EBAY,Ebay Inc,consumer-discretionary
-113,EXPE,Expedia Group Inc,consumer-discretionary
-114,F,Ford Motor Company,consumer-discretionary
-115,GM,General Motors Company,consumer-discretionary
-116,GPC,Genuine Parts Company,consumer-discretionary
-117,GRMN,Garmin Ltd,consumer-discretionary
-118,HAS,Hasbro Inc,consumer-discretionary
-119,HD,Home Depot,consumer-discretionary
-120,HLT,Hilton Inc,consumer-discretionary
-121,KMX,Carmax Inc,consumer-discretionary
-122,LEN,Lennar Corp,consumer-discretionary
-123,LKQ,LKQ Corp,consumer-discretionary
-124,LOW,Lowe's Companies,consumer-discretionary
-125,LVS,Las Vegas Sands,consumer-discretionary
-126,MAR,Marriot Int Cl A,consumer-discretionary
-127,MCD,McDonald's Corp,consumer-discretionary
-128,MGM,MGM Resorts International,consumer-discretionary
-129,MHK,Mohawk Industries,consumer-discretionary
-130,NCLH,Norwegian Cruise Ord,consumer-discretionary
-131,NKE,Nike Inc,consumer-discretionary
-132,NVR,NVR Inc,consumer-discretionary
-133,NWL,Newell Rubbermaid Inc,consumer-discretionary
-134,ORLY,O'Reilly Automotive,consumer-discretionary
-135,PENN,Penn Natl Gaming Inc,consumer-discretionary
-136,PHM,Pultegroup,consumer-discretionary
-137,POOL,Pool Corp,consumer-discretionary
-138,PVH,Phillips-Van Heusen Corp,consumer-discretionary
-139,RCL,Royal Caribbean Cruises Ltd,consumer-discretionary
-140,RL,Ralph Lauren Corp,consumer-discretionary
-141,ROST,Ross Stores Inc,consumer-discretionary
-142,SBUX,Starbucks Corp,consumer-discretionary
-143,TGT,Target Corp,consumer-discretionary
-144,TJX,TJX Companies,consumer-discretionary
-145,TPR,Tapestry Inc,consumer-discretionary
-146,TSCO,Tractor Supply Company,consumer-discretionary
-147,TSLA,Tesla Inc,consumer-discretionary
-148,ULTA,Ulta Beauty Inc,consumer-discretionary
-149,VFC,V.F. Corp,consumer-discretionary
-150,WHR,Whirlpool Corp,consumer-discretionary
-151,WYNN,Wynn Resorts Ltd,consumer-discretionary
-152,YUM,Yum! Brands,consumer-discretionary
-153,A,Agilent Technologies,health-care
-154,ABBV,Abbvie Inc,health-care
-155,ABC,Amerisourcebergen Corp,health-care
-156,ABMD,Abiomed Inc,health-care
-157,ABT,Abbott Laboratories,health-care
-158,ALGN,Align Technology,health-care
-159,AMGN,Amgen Inc,health-care
-160,BDX,Becton Dickinson and Company,health-care
-161,BIO,Bio-Rad Laboratories,health-care
-162,BMY,Bristol-Myers Squibb Company,health-care
-163,BSX,Boston Scientific Corp,health-care
-164,CAH,Cardinal Health,health-care
-165,CI,Cigna Corp,health-care
-166,CNC,Centene Corp,health-care
-167,COO,Cooper Companies,health-care
-168,CTLT,Catalent Inc,health-care
-169,CVS,CVS Corp,health-care
-170,DGX,Quest Diagnostics Inc,health-care
-171,DHR,Danaher Corp,health-care
-172,DVA,Davita Healthcare Partners Inc,health-care
-173,DXCM,Dexcom Inc,health-care
-174,ELV,Elevance Health Inc,health-care
-175,EW,Edwards Lifesciences Corp,health-care
-176,GILD,Gilead Sciences Inc,health-care
-177,HCA,Hca Holdings Inc,health-care
-178,HOLX,Hologic Inc,health-care
-179,HSIC,Henry Schein Inc,health-care
-180,HUM,Humana Inc,health-care
-181,IDXX,Idexx Laboratories,health-care
-182,ILMN,Illumina Inc,health-care
-183,INCY,Incyte Corp,health-care
-184,IQV,Iqvia Holdings Inc,health-care
-185,ISRG,Intuitive Surg Inc,health-care
-186,JNJ,Johnson & Johnson,health-care
-187,LH,Laboratory Corp of America Holdings,health-care
-188,LLY,Eli Lilly and Company,health-care
-189,MCK,Mckesson Corp,health-care
-190,MDT,Medtronic Inc,health-care
-191,MOH,Molina Healthcare Inc,health-care
-192,MRK,Merck & Company,health-care
-193,MRNA,Moderna Inc,health-care
-194,MTD,Mettler-Toledo International,health-care
-195,OGN,Organon & CO,health-care
-196,PFE,Pfizer Inc,health-care
-197,PKI,Perkinelmer,health-care
-198,REGN,Regeneron Pharmaceuticals,health-care
-199,RMD,Resmed Inc,health-care
-200,STE,Steris Corp,health-care
-201,SYK,Stryker Corp,health-care
-202,TECH,Bio-Techne Cp,health-care
-203,TFX,Teleflex Inc,health-care
-204,TMO,Thermo Fisher Scientific Inc,health-care
-205,UHS,Universal Health Services,health-care
-206,UNH,Unitedhealth Group Inc,health-care
-207,VRTX,Vertex Pharmaceutic,health-care
-208,VTRS,Viatris Inc,health-care
-209,WAT,Waters Corp,health-care
-210,WST,West Pharmaceutical Services,health-care
-211,XRAY,Dentsply Sirona Inc,health-care
-212,ZBH,Zimmer Biomet Holdings,health-care
-213,ZTS,Zoetis Inc Cl A,health-care
-214,ATVI,Activision Blizzard,communication-services
-215,CHTR,Charter Communicatio,communication-services
-216,CMCSA,Comcast Corp A,communication-services
-217,DIS,Walt Disney Company,communication-services
-218,DISH,Dish Network Corp,communication-services
-219,EA,Electronic Arts Inc,communication-services
-220,FOX,Fox Corp Cl B,communication-services
-221,GOOG,Alphabet Cl C,communication-services
-222,IPG,Interpublic Group of Companies,communication-services
-223,LUMN,Centurylink,communication-services
-224,LYV,Live Nation Entertainment,communication-services
-225,META,Meta Platforms Inc,communication-services
-226,MTCH,Match Group Inc,communication-services
-227,NFLX,Netflix Inc,communication-services
-228,NWS,News Cp Cl B,communication-services
-229,OMC,Omnicom Group Inc,communication-services
-230,PARA,Paramount Global Cl B,communication-services
-231,T,AT&T Inc,communication-services
-232,TMUS,T-Mobile US,communication-services
-233,TTWO,Take-Two Interactive,communication-services
-234,TWTR,Twitter Inc,communication-services
-235,VZ,Verizon Communications Inc,communication-services
-236,WBD,Discovery Inc Series A,communication-services
-237,APA,Apa Corp,energies
-238,BKR,Baker Hughes A Ge Co. Cl A,energies
-239,COP,Conocophillips,energies
-240,CTRA,Coterra Energy Inc,energies
-241,CVX,Chevron Corp,energies
-242,DVN,Devon Energy Corp,energies
-243,EOG,Eog Resources,energies
-244,HAL,Halliburton Company,energies
-245,KMI,Kinder Morgan,energies
-246,MPC,Marathon Petroleum Corp,energies
-247,MRO,Marathon Oil Corp,energies
-248,OKE,Oneok Inc,energies
-249,OXY,Occidental Petroleum Corp,energies
-250,PSX,Phillips 66,energies
-251,PXD,Pioneer Natural Resources Company,energies
-252,VLO,Valero Energy Corp,energies
-253,WMB,Williams Companies,energies
-254,XOM,Exxon Mobil Corp,energies
-255,ADM,Archer Daniels Midland,consumer-staples
-256,BF.B,Brown Forman Inc Cl B,consumer-staples
-257,CAG,Conagra Brands Inc,consumer-staples
-258,CHD,Church & Dwight Company,consumer-staples
-259,CL,Colgate-Palmolive Company,consumer-staples
-260,CLX,Clorox Company,consumer-staples
-261,COST,Costco Wholesale,consumer-staples
-262,EL,Estee Lauder Companies,consumer-staples
-263,HRL,Hormel Foods Corp,consumer-staples
-264,HSY,Hershey Foods Corp,consumer-staples
-265,K,Kellogg Company,consumer-staples
-266,KDP,Keurig Dr Pepper Inc,consumer-staples
-267,KHC,Kraft Heinz Company,consumer-staples
-268,KMB,Kimberly-Clark Corp,consumer-staples
-269,KO,Coca-Cola Company,consumer-staples
-270,LW,Lamb Weston Holdings Inc,consumer-staples
-271,MDLZ,Mondelez Intl Inc,consumer-staples
-272,MKC,Mccormick & Company,consumer-staples
-273,MNST,Monster Beverage Cp,consumer-staples
-274,MO,Altria Group,consumer-staples
-275,PEP,Pepsico Inc,consumer-staples
-276,PG,Procter & Gamble Company,consumer-staples
-277,PM,Philip Morris International Inc,consumer-staples
-278,SJM,J.M. Smucker Company,consumer-staples
-279,STZ,Constellation Brands Inc,consumer-staples
-280,SYY,Sysco Corp,consumer-staples
-281,TAP,Molson Coors Brewing Company,consumer-staples
-282,TSN,Tyson Foods,consumer-staples
-283,WBA,Walgreens Boots Alliance,consumer-staples
-284,WMT,Walmart Inc,consumer-staples
-285,AEE,Ameren Corp,utilities
-286,AEP,American Electric Power Company,utilities
-287,AES,The Aes Corp,utilities
-288,ATO,Atmos Energy Corp,utilities
-289,AWK,American Water Works,utilities
-290,CEG,Constellation Energy Corp,utilities
-291,CMS,Cms Energy Corp,utilities
-292,D,Dominion Resources,utilities
-293,DUK,Duke Energy Corp,utilities
-294,ED,Consolidated Edison Company,utilities
-295,EIX,Edison International,utilities
-296,ES,Eversource Energy,utilities
-297,ETR,Entergy Corp,utilities
-298,EVRG,Evergy Inc,utilities
-299,EXC,Exelon Corp,utilities
-300,LNT,Alliant Energy Corp,utilities
-301,NEE,Nextera Energy,utilities
-302,NI,NiSource Inc,utilities
-303,NRG,NRG Energy,utilities
-304,PEG,Public Service Enterprise Group Inc,utilities
-305,PNW,Pinnacle West Capital Corp,utilities
-306,PPL,PPL Corp,utilities
-307,SO,Southern Company,utilities
-308,SRE,Sempra,utilities
-309,WEC,Wisconsin Energy Corp,utilities
-310,XEL,XCEL Energy Inc,utilities
-311,AAL,American Airlines Gp,industrials
-312,ALK,Alaska Air Group,industrials
-313,ALLE,Allegion Plc,industrials
-314,AME,Ametek Inc,industrials
-315,AOS,Smith A.O. Corp,industrials
-316,BA,Boeing Company,industrials
-317,CARR,Carrier Global Corp,industrials
-318,CHRW,C.H. Robinson Ww,industrials
-319,CPRT,Copart Inc,industrials
-320,CSX,CSX Corp,industrials
-321,CTAS,Cintas Corp,industrials
-322,DAL,Delta Air Lines Inc,industrials
-323,DE,Deere & Company,industrials
-324,DOV,Dover Corp,industrials
-325,EFX,Equifax Inc,industrials
-326,ETN,Eaton Corp,industrials
-327,EXPD,Expeditors Intl,industrials
-328,FAST,Fastenal Company,industrials
-329,FBHS,Fortune Brands Home & Security,industrials
-330,FDX,Fedex Corp,industrials
-331,FTV,Fortive Corp,industrials
-332,GD,General Dynamics Corp,industrials
-333,GE,General Electric Company,industrials
-334,GNRC,Generac Holdings Inc,industrials
-335,GWW,W.W. Grainger,industrials
-336,HII,Huntington Ingalls Industries,industrials
-337,HON,Honeywell International Inc,industrials
-338,HWM,Howmet Aerospace Inc,industrials
-339,IEX,Idex Corp,industrials
-340,IR,Ingersoll Rand Inc,industrials
-341,ITW,Illinois Tool Works Inc,industrials
-342,J,Jacobs Engineering Group Inc,industrials
-343,JBHT,J B Hunt Transport,industrials
-344,JCI,Johnson Controls Intl,industrials
-345,LDOS,Leidos Holdings Inc,industrials
-346,LHX,L3Harris Technologies Inc,industrials
-347,LMT,Lockheed Martin Corp,industrials
-348,LUV,Southwest Airlines Company,industrials
-349,MAS,Masco Corp,industrials
-350,MMM,3M Company,industrials
-351,NDSN,Nordson Corp,industrials
-352,NLSN,Nielsen Holdings Plc,industrials
-353,NOC,Northrop Grumman Corp,industrials
-354,NSC,Norfolk Southern Corp,industrials
-355,ODFL,Old Dominion Freight Line Inc,industrials
-356,OTIS,Otis Worldwide Corp,industrials
-357,PCAR,Paccar Inc,industrials
-358,PH,Parker-Hannifin Corp,industrials
-359,PNR,Pentair Ltd,industrials
-360,PWR,Quanta Services,industrials
-361,RHI,Robert Half International Inc,industrials
-362,ROK,Rockwell Automation Inc,industrials
-363,ROL,Rollins Inc,industrials
-364,RSG,Republic Services,industrials
-365,RTX,Raytheon Technologies Corp,industrials
-366,SNA,Snap-On Inc,industrials
-367,SPGI,S&P Global Inc,industrials
-368,SWK,Stanley Black & Decker Inc,industrials
-369,TDG,Transdigm Group Inc,industrials
-370,TT,Trane Technologies Plc,industrials
-371,TXT,Textron Inc,industrials
-372,UAL,United Airlines Holdings Inc,industrials
-373,UNP,Union Pacific Corp,industrials
-374,UPS,United Parcel Service,industrials
-375,URI,United Rentals,industrials
-376,VRSK,Verisk Analytics Inc,industrials
-377,WAB,Wabtec Corp,industrials
-378,WM,Waste Management,industrials
-379,XYL,Xylem Inc,industrials
-380,AFL,Aflac Inc,financials
-381,AIG,American International Group,financials
-382,AIZ,Assurant Inc,financials
-383,AJG,Arthur J. Gallagher & Company,financials
-384,ALL,Allstate Corp,financials
-385,AMP,Ameriprise Financial Services,financials
-386,AON,AON Plc,financials
-387,BAC,Bank of America Corp,financials
-388,BK,Bank of New York Mellon Corp,financials
-389,BLK,Blackrock Inc,financials
-390,BRK.B,Berkshire Hathaway Cl B,financials
-391,BRO,Brown & Brown,financials
-392,C,Citigroup Inc,financials
-393,CB,Chubb Ltd,financials
-394,CBOE,CBOE Global Markets Inc,financials
-395,CINF,Cincinnati Financial,financials
-396,CMA,Comerica Inc,financials
-397,CME,CME Group Inc,financials
-398,COF,Capital One Financial Corp,financials
-399,DFS,Discover Financial Services,financials
-400,FDS,Factset Research Systems Inc,financials
-401,FITB,Fifth Third Bancorp,financials
-402,FRC,First Republic Bank,financials
-403,GL,Globe Life Inc,financials
-404,GS,Goldman Sachs Group,financials
-405,HBAN,Huntington Bcshs,financials
-406,HIG,Hartford Financial Services Group,financials
-407,ICE,Intercontinental Exchange,financials
-408,IVZ,Invesco Plc,financials
-409,JPM,JP Morgan Chase & Company,financials
-410,KEY,Keycorp,financials
-411,L,Loews Corp,financials
-412,LNC,Lincoln National Corp,financials
-413,MCO,Moody's Corp,financials
-414,MET,Metlife Inc,financials
-415,MKTX,Marketaxess Holdings,financials
-416,MMC,Marsh & Mclennan Companies,financials
-417,MS,Morgan Stanley,financials
-418,MSCI,MSCI Inc,financials
-419,MTB,M&T Bank Corp,financials
-420,NDAQ,Nasdaq Inc,financials
-421,NTRS,Northern Trust Corp,financials
-422,PFG,Principal Financial Group Inc,financials
-423,PGR,Progressive Corp,financials
-424,PNC,PNC Bank,financials
-425,PRU,Prudential Financial Inc,financials
-426,RE,Everest Re Group,financials
-427,RF,Regions Financial Corp,financials
-428,RJF,Raymond James Financial,financials
-429,SBNY,Signature Bank,financials
-430,SCHW,The Charles Schwab Corp,financials
-431,SIVB,Svb Financial Group,financials
-432,SPGI,S&P Global Inc,financials
-433,STT,State Street Corp,financials
-434,SYF,Synchrony Financial,financials
-435,TFC,Truist Financial Corp,financials
-436,TROW,T Rowe Price Group,financials
-437,TRV,The Travelers Companies Inc,financials
-438,USB,U.S. Bancorp,financials
-439,WFC,Wells Fargo & Company,financials
-440,WRB,W.R. Berkley Corp,financials
-441,WTW,Willis Towers Watson Public Ltd CO,financials
-442,ZION,Zions Bancorp,financials
-443,AMT,American Tower Corp,real-estate
-444,ARE,Alexandria Real Estate Equities,real-estate
-445,AVB,Avalonbay Communities,real-estate
-446,BXP,Boston Properties,real-estate
-447,CBRE,CBRE Group Inc,real-estate
-448,CCI,Crown Castle Inc,real-estate
-449,CPT,Camden Property Trust,real-estate
-450,DRE,Duke Realty Corp,real-estate
-451,EQR,Equity Residential,real-estate
-452,ESS,Essex Property Trust,real-estate
-453,EXR,Extra Space Storage Inc,real-estate
-454,FRT,Federal Realty Investment Trust,real-estate
-455,HST,Host Marriott Financial Trust,real-estate
-456,IRM,Iron Mountain Inc,real-estate
-457,KIM,Kimco Realty Corp,real-estate
-458,O,Realty Income Corp,real-estate
-459,PEAK,Healthpeak Properties Inc,real-estate
-460,PLD,Prologis Inc,real-estate
-461,PSA,Public Storage,real-estate
-462,REG,Regency Centers Corp,real-estate
-463,SBAC,SBA Communications,real-estate
-464,SPG,Simon Property Group,real-estate
-465,UDR,United Dominion Realty Trust,real-estate
-466,VICI,Vici Properties Inc,real-estate
-467,VNO,Vornado Realty Trust,real-estate
-468,VTR,Ventas Inc,real-estate
-469,WELL,Welltower Inc,real-estate
-470,WY,Weyerhaeuser Company,real-estate
+7,CTVA,Corteva Inc,materials
+8,DD,Dupont Denemours Inc,materials
+9,DOW,Dow Inc,materials
+10,ECL,Ecolab Inc,materials
+11,EMN,Eastman Chemical Company,materials
+12,FCX,Freeport-Mcmoran Inc,materials
+13,FMC,FMC Corp,materials
+14,IFF,International Flavors & Fragrances,materials
+15,IP,International Paper Company,materials
+16,LIN,Linde Plc,materials
+17,LYB,Lyondellbasell Industries NV,materials
+18,MLM,Martin Marietta Materials,materials
+19,MOS,Mosaic Company,materials
+20,NEM,Newmont Mining Corp,materials
+21,NUE,Nucor Corp,materials
+22,PKG,Packaging Corp of America,materials
+23,PPG,PPG Industries,materials
+24,SEE,Sealed Air Corp,materials
+25,SHW,Sherwin-Williams Company,materials
+26,VMC,Vulcan Materials Company,materials
+27,WRK,Westrock Company,materials
+28,AAPL,Apple Inc,information-technology
+29,ACN,Accenture Plc,information-technology
+30,ADBE,Adobe Systems Inc,information-technology
+31,ADI,Analog Devices,information-technology
+32,ADP,Automatic Data Procs,information-technology
+33,ADSK,Autodesk Inc,information-technology
+34,AKAM,Akamai Technologies,information-technology
+35,AMAT,Applied Materials,information-technology
+36,AMD,Adv Micro Devices,information-technology
+37,ANET,Arista Networks Inc,information-technology
+38,ANSS,Ansys Inc,information-technology
+39,APH,Amphenol Corp,information-technology
+40,AVGO,Broadcom Ltd,information-technology
+41,BR,Broadridge Financial Solutions Llc,information-technology
+42,CDAY,Ceridian Hcm Holding Inc,information-technology
+43,CDNS,Cadence Design Sys,information-technology
+44,CDW,CDW Corp,information-technology
+45,CRM,Salesforce Inc,information-technology
+46,CSCO,Cisco Systems Inc,information-technology
+47,CTSH,Cognizant Tech Sol,information-technology
+48,CTXS,Citrix Systems Inc,information-technology
+49,DXC,Dxc Technology Company,information-technology
+50,ENPH,Enphase Energy Inc,information-technology
+51,EPAM,Epam Systems Inc,information-technology
+52,FFIV,F5 Inc,information-technology
+53,FIS,Fidelity National Information Services,information-technology
+54,FISV,Fiserv Inc,information-technology
+55,FLT,Fleetcor Technologies,information-technology
+56,FTNT,Fortinet Inc,information-technology
+57,GLW,Corning Inc,information-technology
+58,GPN,Global Payments Inc,information-technology
+59,HPE,Hewlett Packard Enterprise Comp,information-technology
+60,HPQ,HP Inc,information-technology
+61,IBM,International Business Machines,information-technology
+62,INTC,Intel Corp,information-technology
+63,INTU,Intuit Inc,information-technology
+64,IT,Gartner Inc,information-technology
+65,JKHY,Jack Henry & Assoc,information-technology
+66,JNPR,Juniper Networks,information-technology
+67,KEYS,Keysight Technologies Inc Comm,information-technology
+68,KLAC,K L A-Tencor Corp,information-technology
+69,LRCX,Lam Research Corp,information-technology
+70,MA,Mastercard Inc,information-technology
+71,MCHP,Microchip Technology,information-technology
+72,MPWR,Monolithic Power Sys,information-technology
+73,MSFT,Microsoft Corp,information-technology
+74,MSI,Motorola Solutions,information-technology
+75,MU,Micron Technology,information-technology
+76,NLOK,Nortonlifelock Inc,information-technology
+77,NOW,Servicenow Inc,information-technology
+78,NTAP,Netapp Inc,information-technology
+79,NVDA,Nvidia Corp,information-technology
+80,NXPI,Nxp Semiconductors,information-technology
+81,ON,On Semiconductor,information-technology
+82,ORCL,Oracle Corp,information-technology
+83,PAYC,Paycom Software Inc,information-technology
+84,PAYX,Paychex Inc,information-technology
+85,PTC,Ptc Inc,information-technology
+86,PYPL,Paypal Holdings,information-technology
+87,QCOM,Qualcomm Inc,information-technology
+88,QRVO,Qorvo Inc,information-technology
+89,ROP,Roper Industries,information-technology
+90,SEDG,Solaredge Tech,information-technology
+91,SNPS,Synopsys Inc,information-technology
+92,STX,Seagate Technology Hldgs Plc,information-technology
+93,SWKS,Skyworks Solutions,information-technology
+94,TDY,Teledyne Technologies Inc,information-technology
+95,TEL,Te Connectivity Ltd,information-technology
+96,TER,Teradyne Inc,information-technology
+97,TRMB,Trimble Navigation,information-technology
+98,TXN,Texas Instruments,information-technology
+99,TYL,Tyler Technologies,information-technology
+100,V,Visa Inc,information-technology
+101,VRSN,Verisign Inc,information-technology
+102,WDC,Western Digital Cp,information-technology
+103,ZBRA,Zebra Technologies,information-technology
+104,AAP,Advance Auto Parts Inc,consumer-discretionary
+105,AMZN,Amazon.com Inc,consumer-discretionary
+106,APTV,Aptiv Plc,consumer-discretionary
+107,AZO,Autozone,consumer-discretionary
+108,BBWI,Bath & Body Works Inc,consumer-discretionary
+109,BBY,Best Buy Company,consumer-discretionary
+110,BKNG,Booking Holdings Inc,consumer-discretionary
+111,BWA,Borgwarner Inc,consumer-discretionary
+112,CCL,Carnival Corp,consumer-discretionary
+113,CMG,Chipotle Mexican Grill,consumer-discretionary
+114,CZR,Caesars Entertainment Inc,consumer-discretionary
+115,DG,Dollar General Corp,consumer-discretionary
+116,DHI,D.R. Horton,consumer-discretionary
+117,DLTR,Dollar Tree Inc,consumer-discretionary
+118,DPZ,Domino's Pizza Inc,consumer-discretionary
+119,DRI,Darden Restaurants,consumer-discretionary
+120,EBAY,Ebay Inc,consumer-discretionary
+121,ETSY,Etsy Inc,consumer-discretionary
+122,EXPE,Expedia Group Inc,consumer-discretionary
+123,F,Ford Motor Company,consumer-discretionary
+124,GM,General Motors Company,consumer-discretionary
+125,GPC,Genuine Parts Company,consumer-discretionary
+126,GRMN,Garmin Ltd,consumer-discretionary
+127,HAS,Hasbro Inc,consumer-discretionary
+128,HD,Home Depot,consumer-discretionary
+129,HLT,Hilton Inc,consumer-discretionary
+130,KMX,Carmax Inc,consumer-discretionary
+131,LEN,Lennar Corp,consumer-discretionary
+132,LKQ,LKQ Corp,consumer-discretionary
+133,LOW,Lowe's Companies,consumer-discretionary
+134,LVS,Las Vegas Sands,consumer-discretionary
+135,MAR,Marriot Int Cl A,consumer-discretionary
+136,MCD,McDonald's Corp,consumer-discretionary
+137,MGM,MGM Resorts International,consumer-discretionary
+138,MHK,Mohawk Industries,consumer-discretionary
+139,NCLH,Norwegian Cruise Ord,consumer-discretionary
+140,NKE,Nike Inc,consumer-discretionary
+141,NVR,NVR Inc,consumer-discretionary
+142,NWL,Newell Rubbermaid Inc,consumer-discretionary
+143,ORLY,O'Reilly Automotive,consumer-discretionary
+144,PENN,Penn Natl Gaming Inc,consumer-discretionary
+145,PHM,Pultegroup,consumer-discretionary
+146,POOL,Pool Corp,consumer-discretionary
+147,PVH,Phillips-Van Heusen Corp,consumer-discretionary
+148,RCL,Royal Caribbean Cruises Ltd,consumer-discretionary
+149,RL,Ralph Lauren Corp,consumer-discretionary
+150,ROST,Ross Stores Inc,consumer-discretionary
+151,SBUX,Starbucks Corp,consumer-discretionary
+152,TGT,Target Corp,consumer-discretionary
+153,TJX,TJX Companies,consumer-discretionary
+154,TPR,Tapestry Inc,consumer-discretionary
+155,TSCO,Tractor Supply Company,consumer-discretionary
+156,TSLA,Tesla Inc,consumer-discretionary
+157,ULTA,Ulta Beauty Inc,consumer-discretionary
+158,VFC,V.F. Corp,consumer-discretionary
+159,WHR,Whirlpool Corp,consumer-discretionary
+160,WYNN,Wynn Resorts Ltd,consumer-discretionary
+161,YUM,Yum! Brands,consumer-discretionary
+162,A,Agilent Technologies,health-care
+163,ABBV,Abbvie Inc,health-care
+164,ABC,Amerisourcebergen Corp,health-care
+165,ABMD,Abiomed Inc,health-care
+166,ABT,Abbott Laboratories,health-care
+167,ALGN,Align Technology,health-care
+168,AMGN,Amgen Inc,health-care
+169,BAX,Baxter International Inc,health-care
+170,BDX,Becton Dickinson and Company,health-care
+171,BIIB,Biogen Inc,health-care
+172,BIO,Bio-Rad Laboratories,health-care
+173,BMY,Bristol-Myers Squibb Company,health-care
+174,BSX,Boston Scientific Corp,health-care
+175,CAH,Cardinal Health,health-care
+176,CI,Cigna Corp,health-care
+177,CNC,Centene Corp,health-care
+178,COO,Cooper Companies,health-care
+179,CRL,Charles River Laboratories Intl,health-care
+180,CTLT,Catalent Inc,health-care
+181,CVS,CVS Corp,health-care
+182,DGX,Quest Diagnostics Inc,health-care
+183,DHR,Danaher Corp,health-care
+184,DVA,Davita Healthcare Partners Inc,health-care
+185,DXCM,Dexcom Inc,health-care
+186,ELV,Elevance Health Inc,health-care
+187,EW,Edwards Lifesciences Corp,health-care
+188,GILD,Gilead Sciences Inc,health-care
+189,HCA,Hca Holdings Inc,health-care
+190,HOLX,Hologic Inc,health-care
+191,HSIC,Henry Schein Inc,health-care
+192,HUM,Humana Inc,health-care
+193,IDXX,Idexx Laboratories,health-care
+194,ILMN,Illumina Inc,health-care
+195,INCY,Incyte Corp,health-care
+196,IQV,Iqvia Holdings Inc,health-care
+197,ISRG,Intuitive Surg Inc,health-care
+198,JNJ,Johnson & Johnson,health-care
+199,LH,Laboratory Corp of America Holdings,health-care
+200,LLY,Eli Lilly and Company,health-care
+201,MCK,Mckesson Corp,health-care
+202,MDT,Medtronic Inc,health-care
+203,MOH,Molina Healthcare Inc,health-care
+204,MRK,Merck & Company,health-care
+205,MRNA,Moderna Inc,health-care
+206,MTD,Mettler-Toledo International,health-care
+207,OGN,Organon & CO,health-care
+208,PFE,Pfizer Inc,health-care
+209,PKI,Perkinelmer,health-care
+210,REGN,Regeneron Pharmaceuticals,health-care
+211,RMD,Resmed Inc,health-care
+212,STE,Steris Corp,health-care
+213,SYK,Stryker Corp,health-care
+214,TECH,Bio-Techne Cp,health-care
+215,TFX,Teleflex Inc,health-care
+216,TMO,Thermo Fisher Scientific Inc,health-care
+217,UHS,Universal Health Services,health-care
+218,UNH,Unitedhealth Group Inc,health-care
+219,VRTX,Vertex Pharmaceutic,health-care
+220,VTRS,Viatris Inc,health-care
+221,WAT,Waters Corp,health-care
+222,WST,West Pharmaceutical Services,health-care
+223,XRAY,Dentsply Sirona Inc,health-care
+224,ZBH,Zimmer Biomet Holdings,health-care
+225,ZTS,Zoetis Inc Cl A,health-care
+226,ATVI,Activision Blizzard,communication-services
+227,CHTR,Charter Communicatio,communication-services
+228,CMCSA,Comcast Corp A,communication-services
+229,DIS,Walt Disney Company,communication-services
+230,DISH,Dish Network Corp,communication-services
+231,EA,Electronic Arts Inc,communication-services
+232,FOX,Fox Corp Cl B,communication-services
+233,GOOG,Alphabet Cl C,communication-services
+234,IPG,Interpublic Group of Companies,communication-services
+235,LUMN,Centurylink,communication-services
+236,LYV,Live Nation Entertainment,communication-services
+237,META,Meta Platforms Inc,communication-services
+238,MTCH,Match Group Inc,communication-services
+239,NFLX,Netflix Inc,communication-services
+240,NWS,News Cp Cl B,communication-services
+241,OMC,Omnicom Group Inc,communication-services
+242,PARA,Paramount Global Cl B,communication-services
+243,T,AT&T Inc,communication-services
+244,TMUS,T-Mobile US,communication-services
+245,TTWO,Take-Two Interactive,communication-services
+246,TWTR,Twitter Inc,communication-services
+247,VZ,Verizon Communications Inc,communication-services
+248,WBD,Discovery Inc Series A,communication-services
+249,APA,Apa Corp,energies
+250,BKR,Baker Hughes A Ge Co. Cl A,energies
+251,COP,Conocophillips,energies
+252,CTRA,Coterra Energy Inc,energies
+253,CVX,Chevron Corp,energies
+254,DVN,Devon Energy Corp,energies
+255,EOG,Eog Resources,energies
+256,FANG,Diamondback Energy,energies
+257,HAL,Halliburton Company,energies
+258,HES,Hess Corp,energies
+259,KMI,Kinder Morgan,energies
+260,MPC,Marathon Petroleum Corp,energies
+261,MRO,Marathon Oil Corp,energies
+262,OKE,Oneok Inc,energies
+263,OXY,Occidental Petroleum Corp,energies
+264,PSX,Phillips 66,energies
+265,PXD,Pioneer Natural Resources Company,energies
+266,SLB,Schlumberger N.V.,energies
+267,VLO,Valero Energy Corp,energies
+268,WMB,Williams Companies,energies
+269,XOM,Exxon Mobil Corp,energies
+270,ADM,Archer Daniels Midland,consumer-staples
+271,BF.B,Brown Forman Inc Cl B,consumer-staples
+272,CAG,Conagra Brands Inc,consumer-staples
+273,CHD,Church & Dwight Company,consumer-staples
+274,CL,Colgate-Palmolive Company,consumer-staples
+275,CLX,Clorox Company,consumer-staples
+276,COST,Costco Wholesale,consumer-staples
+277,CPB,Campbell Soup Company,consumer-staples
+278,EL,Estee Lauder Companies,consumer-staples
+279,GIS,General Mills,consumer-staples
+280,HRL,Hormel Foods Corp,consumer-staples
+281,HSY,Hershey Foods Corp,consumer-staples
+282,K,Kellogg Company,consumer-staples
+283,KDP,Keurig Dr Pepper Inc,consumer-staples
+284,KHC,Kraft Heinz Company,consumer-staples
+285,KMB,Kimberly-Clark Corp,consumer-staples
+286,KO,Coca-Cola Company,consumer-staples
+287,KR,Kroger Company,consumer-staples
+288,LW,Lamb Weston Holdings Inc,consumer-staples
+289,MDLZ,Mondelez Intl Inc,consumer-staples
+290,MKC,Mccormick & Company,consumer-staples
+291,MNST,Monster Beverage Cp,consumer-staples
+292,MO,Altria Group,consumer-staples
+293,PEP,Pepsico Inc,consumer-staples
+294,PG,Procter & Gamble Company,consumer-staples
+295,PM,Philip Morris International Inc,consumer-staples
+296,SJM,J.M. Smucker Company,consumer-staples
+297,STZ,Constellation Brands Inc,consumer-staples
+298,SYY,Sysco Corp,consumer-staples
+299,TAP,Molson Coors Brewing Company,consumer-staples
+300,TSN,Tyson Foods,consumer-staples
+301,WBA,Walgreens Boots Alliance,consumer-staples
+302,WMT,Walmart Inc,consumer-staples
+303,AEE,Ameren Corp,utilities
+304,AEP,American Electric Power Company,utilities
+305,AES,The Aes Corp,utilities
+306,ATO,Atmos Energy Corp,utilities
+307,AWK,American Water Works,utilities
+308,CEG,Constellation Energy Corp,utilities
+309,CMS,Cms Energy Corp,utilities
+310,CNP,Centerpoint Energy Inc,utilities
+311,D,Dominion Resources,utilities
+312,DTE,Dte Energy Company,utilities
+313,DUK,Duke Energy Corp,utilities
+314,ED,Consolidated Edison Company,utilities
+315,EIX,Edison International,utilities
+316,ES,Eversource Energy,utilities
+317,ETR,Entergy Corp,utilities
+318,EVRG,Evergy Inc,utilities
+319,EXC,Exelon Corp,utilities
+320,FE,Firstenergy Corp,utilities
+321,LNT,Alliant Energy Corp,utilities
+322,NEE,Nextera Energy,utilities
+323,NI,NiSource Inc,utilities
+324,NRG,NRG Energy,utilities
+325,PEG,Public Service Enterprise Group Inc,utilities
+326,PNW,Pinnacle West Capital Corp,utilities
+327,PPL,PPL Corp,utilities
+328,SO,Southern Company,utilities
+329,SRE,Sempra,utilities
+330,WEC,Wisconsin Energy Corp,utilities
+331,XEL,XCEL Energy Inc,utilities
+332,AAL,American Airlines Gp,industrials
+333,ALK,Alaska Air Group,industrials
+334,ALLE,Allegion Plc,industrials
+335,AME,Ametek Inc,industrials
+336,AOS,Smith A.O. Corp,industrials
+337,BA,Boeing Company,industrials
+338,CARR,Carrier Global Corp,industrials
+339,CAT,Caterpillar Inc,industrials
+340,CHRW,C.H. Robinson Ww,industrials
+341,CMI,Cummins Inc,industrials
+342,CPRT,Copart Inc,industrials
+343,CSX,CSX Corp,industrials
+344,CTAS,Cintas Corp,industrials
+345,DAL,Delta Air Lines Inc,industrials
+346,DE,Deere & Company,industrials
+347,DOV,Dover Corp,industrials
+348,EFX,Equifax Inc,industrials
+349,EMR,Emerson Electric Company,industrials
+350,ETN,Eaton Corp,industrials
+351,EXPD,Expeditors Intl,industrials
+352,FAST,Fastenal Company,industrials
+353,FBHS,Fortune Brands Home & Security,industrials
+354,FDX,Fedex Corp,industrials
+355,FTV,Fortive Corp,industrials
+356,GD,General Dynamics Corp,industrials
+357,GE,General Electric Company,industrials
+358,GNRC,Generac Holdings Inc,industrials
+359,GWW,W.W. Grainger,industrials
+360,HII,Huntington Ingalls Industries,industrials
+361,HON,Honeywell International Inc,industrials
+362,HWM,Howmet Aerospace Inc,industrials
+363,IEX,Idex Corp,industrials
+364,IR,Ingersoll Rand Inc,industrials
+365,ITW,Illinois Tool Works Inc,industrials
+366,J,Jacobs Engineering Group Inc,industrials
+367,JBHT,J B Hunt Transport,industrials
+368,JCI,Johnson Controls Intl,industrials
+369,LDOS,Leidos Holdings Inc,industrials
+370,LHX,L3Harris Technologies Inc,industrials
+371,LMT,Lockheed Martin Corp,industrials
+372,LUV,Southwest Airlines Company,industrials
+373,MAS,Masco Corp,industrials
+374,MMM,3M Company,industrials
+375,NDSN,Nordson Corp,industrials
+376,NLSN,Nielsen Holdings Plc,industrials
+377,NOC,Northrop Grumman Corp,industrials
+378,NSC,Norfolk Southern Corp,industrials
+379,ODFL,Old Dominion Freight Line Inc,industrials
+380,OTIS,Otis Worldwide Corp,industrials
+381,PCAR,Paccar Inc,industrials
+382,PH,Parker-Hannifin Corp,industrials
+383,PNR,Pentair Ltd,industrials
+384,PWR,Quanta Services,industrials
+385,RHI,Robert Half International Inc,industrials
+386,ROK,Rockwell Automation Inc,industrials
+387,ROL,Rollins Inc,industrials
+388,RSG,Republic Services,industrials
+389,RTX,Raytheon Technologies Corp,industrials
+390,SNA,Snap-On Inc,industrials
+391,SPGI,S&P Global Inc,industrials
+392,SWK,Stanley Black & Decker Inc,industrials
+393,TDG,Transdigm Group Inc,industrials
+394,TT,Trane Technologies Plc,industrials
+395,TXT,Textron Inc,industrials
+396,UAL,United Airlines Holdings Inc,industrials
+397,UNP,Union Pacific Corp,industrials
+398,UPS,United Parcel Service,industrials
+399,URI,United Rentals,industrials
+400,VRSK,Verisk Analytics Inc,industrials
+401,WAB,Wabtec Corp,industrials
+402,WM,Waste Management,industrials
+403,XYL,Xylem Inc,industrials
+404,AFL,Aflac Inc,financials
+405,AIG,American International Group,financials
+406,AIZ,Assurant Inc,financials
+407,AJG,Arthur J. Gallagher & Company,financials
+408,ALL,Allstate Corp,financials
+409,AMP,Ameriprise Financial Services,financials
+410,AON,AON Plc,financials
+411,AXP,American Express Company,financials
+412,BAC,Bank of America Corp,financials
+413,BEN,Franklin Resources,financials
+414,BK,Bank of New York Mellon Corp,financials
+415,BLK,Blackrock Inc,financials
+416,BRK.B,Berkshire Hathaway Cl B,financials
+417,BRO,Brown & Brown,financials
+418,C,Citigroup Inc,financials
+419,CB,Chubb Ltd,financials
+420,CBOE,CBOE Global Markets Inc,financials
+421,CFG,Citizens Financial Group Inc/Ri,financials
+422,CINF,Cincinnati Financial,financials
+423,CMA,Comerica Inc,financials
+424,CME,CME Group Inc,financials
+425,COF,Capital One Financial Corp,financials
+426,DFS,Discover Financial Services,financials
+427,FDS,Factset Research Systems Inc,financials
+428,FITB,Fifth Third Bancorp,financials
+429,FRC,First Republic Bank,financials
+430,GL,Globe Life Inc,financials
+431,GS,Goldman Sachs Group,financials
+432,HBAN,Huntington Bcshs,financials
+433,HIG,Hartford Financial Services Group,financials
+434,ICE,Intercontinental Exchange,financials
+435,IVZ,Invesco Plc,financials
+436,JPM,JP Morgan Chase & Company,financials
+437,KEY,Keycorp,financials
+438,L,Loews Corp,financials
+439,LNC,Lincoln National Corp,financials
+440,MCO,Moody's Corp,financials
+441,MET,Metlife Inc,financials
+442,MKTX,Marketaxess Holdings,financials
+443,MMC,Marsh & Mclennan Companies,financials
+444,MS,Morgan Stanley,financials
+445,MSCI,MSCI Inc,financials
+446,MTB,M&T Bank Corp,financials
+447,NDAQ,Nasdaq Inc,financials
+448,NTRS,Northern Trust Corp,financials
+449,PFG,Principal Financial Group Inc,financials
+450,PGR,Progressive Corp,financials
+451,PNC,PNC Bank,financials
+452,PRU,Prudential Financial Inc,financials
+453,RE,Everest Re Group,financials
+454,RF,Regions Financial Corp,financials
+455,RJF,Raymond James Financial,financials
+456,SBNY,Signature Bank,financials
+457,SCHW,The Charles Schwab Corp,financials
+458,SIVB,Svb Financial Group,financials
+459,SPGI,S&P Global Inc,financials
+460,STT,State Street Corp,financials
+461,SYF,Synchrony Financial,financials
+462,TFC,Truist Financial Corp,financials
+463,TROW,T Rowe Price Group,financials
+464,TRV,The Travelers Companies Inc,financials
+465,USB,U.S. Bancorp,financials
+466,WFC,Wells Fargo & Company,financials
+467,WRB,W.R. Berkley Corp,financials
+468,WTW,Willis Towers Watson Public Ltd CO,financials
+469,ZION,Zions Bancorp,financials
+470,AMT,American Tower Corp,real-estate
+471,ARE,Alexandria Real Estate Equities,real-estate
+472,AVB,Avalonbay Communities,real-estate
+473,BXP,Boston Properties,real-estate
+474,CBRE,CBRE Group Inc,real-estate
+475,CCI,Crown Castle Inc,real-estate
+476,CPT,Camden Property Trust,real-estate
+477,DLR,Digital Realty Trust,real-estate
+478,DRE,Duke Realty Corp,real-estate
+479,EQIX,Equinix Inc,real-estate
+480,EQR,Equity Residential,real-estate
+481,ESS,Essex Property Trust,real-estate
+482,EXR,Extra Space Storage Inc,real-estate
+483,FRT,Federal Realty Investment Trust,real-estate
+484,HST,Host Marriott Financial Trust,real-estate
+485,IRM,Iron Mountain Inc,real-estate
+486,KIM,Kimco Realty Corp,real-estate
+487,MAA,Mid-America Apartment Communities,real-estate
+488,O,Realty Income Corp,real-estate
+489,PEAK,Healthpeak Properties Inc,real-estate
+490,PLD,Prologis Inc,real-estate
+491,PSA,Public Storage,real-estate
+492,REG,Regency Centers Corp,real-estate
+493,SBAC,SBA Communications,real-estate
+494,SPG,Simon Property Group,real-estate
+495,UDR,United Dominion Realty Trust,real-estate
+496,VICI,Vici Properties Inc,real-estate
+497,VNO,Vornado Realty Trust,real-estate
+498,VTR,Ventas Inc,real-estate
+499,WELL,Welltower Inc,real-estate
+500,WY,Weyerhaeuser Company,real-estate
