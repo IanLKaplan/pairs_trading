@@ -49,8 +49,8 @@
 # </blockquote>
 # <p>
 # Pairs trading algorithms have been reported to yield portfolios with Sharpe ratios in excess of 1.0 and returns of 10% or
-# higher. Pairs trading takes both long and short positions, so the portfolio tends to be market neutral. A pairs trading portfolio
-# can have drawdowns, but the drawdowns should be less than a benchmark like the S&P 500 because of the market neutral nature of the
+# higher. Pairs trading takes both long and short positions, so the portfolio tends to be market-neutral. A pairs trading portfolio
+# can have drawdowns, but the drawdowns should be less than a benchmark like the S&P 500 because of the market-neutral nature of the
 # portfolio.
 # </p>
 # <p>
@@ -1769,9 +1769,12 @@ class HalflifeCalculation:
 
     def calc_spread(self, coint_info: CointInfo, window_start: int) -> np.array:
         pair_l = coint_info.pair_str.split(':')
-        asset_a_a = self.close_prices_df[pair_l[0]].iloc[window_start:window_start + self.window].values
-        asset_b_a = self.close_prices_df[pair_l[1]].iloc[window_start:window_start + self.window].values
-        spread_a = asset_a_a - coint_info.intercept - (coint_info.weight * asset_b_a)
+        if pair_l[0] in self.close_prices_df.columns and pair_l[1] in self.close_prices_df.columns:
+            asset_a_a = self.close_prices_df[pair_l[0]].iloc[window_start:window_start + self.window].values
+            asset_b_a = self.close_prices_df[pair_l[1]].iloc[window_start:window_start + self.window].values
+            spread_a = asset_a_a - coint_info.intercept - (coint_info.weight * asset_b_a)
+        else:
+            spread_a = np.zeros(0)
         return spread_a
 
     def half_life_distribution(self) -> np.array:
@@ -1797,9 +1800,10 @@ class HalflifeCalculation:
                     elem_n_granger = elem_n_coint.granger_coint
                     if elem_n_granger.confidence > 0:
                         spread_a = self.calc_spread(elem_n_granger, window_start)
-                        half_life = self.half_life(spread_a)
-                        if half_life > 0:
-                            halflife_l.append(half_life)
+                        if len(spread_a) > 0:
+                            half_life = self.half_life(spread_a)
+                            if half_life > 0:
+                                halflife_l.append(half_life)
             window_start += self.window
         halflife_a = np.array(halflife_l)
         halflife_std = np.std(halflife_a)

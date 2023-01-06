@@ -34,8 +34,8 @@ combination of both.
 </blockquote>
 <p>
 Pairs trading algorithms have been reported to yield portfolios with Sharpe ratios in excess of 1.0 and returns of 10% or
-higher. Pairs trading takes both long and short positions, so the portfolio tends to be market neutral. A pairs trading portfolio
-can have drawdowns, but the drawdowns should be less than a benchmark like the S&P 500 because of the market neutral nature of the
+higher. Pairs trading takes both long and short positions, so the portfolio tends to be market-neutral. A pairs trading portfolio
+can have drawdowns, but the drawdowns should be less than a benchmark like the S&P 500 because of the market-neutral nature of the
 portfolio.
 </p>
 <p>
