@@ -7,16 +7,17 @@ from datetime import datetime, timedelta
 from utils.convert_date import convert_date
 from multiprocessing import Pool
 
+
 class MarketData:
     """
     This class supports retrieving and storing stock market close data from Yahoo.
     """
 
-    def __init__(self, start_date: datetime, path: str):
+    def __init__(self, start_date: datetime):
         self.start_date = convert_date(start_date)
-        self.path = path
         # self.end_date: datetime = convert_date(datetime.today() - timedelta(days=1))
         self.end_date: datetime = convert_date(datetime.today())
+        self.path = 's_and_p_data'
 
     def get_market_data(self,
                         symbol: str,
@@ -116,3 +117,40 @@ class MarketData:
         # drop the stocks with different start dates
         close_df = close_df.dropna(axis='columns')
         return close_df
+
+
+def read_s_and_p_stock_info(path: str) -> pd.DataFrame:
+    """
+    Read a file containing the information on S&P 500 stocks (e.g., the symbol, company name and sector)
+    :param path: the path to the file
+    :return: a DataFrame with columns Symbol, Name and Sector
+    """
+    s_and_p_stocks = pd.DataFrame()
+    if os.access(path, os.R_OK):
+        # s_and_p_socks columns are Symbol, Name and Sector
+        s_and_p_stocks = pd.read_csv(path, index_col=0)
+        new_names = [sym.replace('.', '-') for sym in s_and_p_stocks['Symbol']]
+        s_and_p_stocks['Symbol'] = new_names
+    else:
+        print(f'Could not read file {path}')
+    return s_and_p_stocks
+
+
+def extract_sectors(stocks_df: pd.DataFrame) -> dict:
+    """
+    Columns in the DataFrame are Symbol,Name,Sector
+    :param stocks_df:
+    :return: a dictionary where the key is the sector and the value is a list of stock symbols in that sector.
+    """
+    sector: str = ''
+    sector_l: list = list()
+    stock_sectors = dict()
+    for t, stock_info in stocks_df.iterrows():
+        if sector != stock_info['Sector']:
+            if len(sector_l) > 0:
+                stock_sectors[sector] = sector_l
+                sector_l = list()
+            sector = stock_info['Sector']
+        sector_l.append(stock_info['Symbol'])
+    stock_sectors[sector] = sector_l
+    return stock_sectors

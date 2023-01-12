@@ -13,10 +13,10 @@
 # ---
 
 # <h2>
-# Pairs Trading
+# Exploratory Statistics of Pairs Trading
 # </h2>
 # <p>
-# The Jupyter notebook explores pairs trading stratagies.
+# The Jupyter notebook explores pairs trading strategies.
 # This document is available on the GitHub repository https://github.com/IanLKaplan/pairs_trading
 # </p>
 # <blockquote>
@@ -49,26 +49,26 @@
 # </blockquote>
 # <p>
 # Pairs trading algorithms have been reported to yield portfolios with Sharpe ratios in excess of 1.0 and returns of 10% or
-# higher. Pairs trading takes both long and short positions, so the portfolio tends to be market-neutral. A pairs trading portfolio
-# can have drawdowns, but the drawdowns should be less than a benchmark like the S&P 500 because of the market-neutral nature of the
-# portfolio.
+# higher. Pairs trading takes both long and short positions, so the portfolio tends to be market neutral. A pairs trading portfolio
+# can have drawdowns, but the drawdowns should be less than a benchmark like the S&P 500 because of the market neutral nature of the
+# portfolio. The lower, market neutral, structure of a pairs trading portfolio means that the portfolio will have a lower return
+# than a comparable benchmark like the S&P 500.
 # </p>
 # <p>
 # Markets tend toward efficiency and many quantitative approaches fade over time as they are adopted by hedge funds. Pairs trading
-# goes back to the mid-1980s. Surprisingly, the approach still seems to be profitable. One reason for this could be that there are a vast
+# goes back to the mid-1980s. Surprisingly, pairs trading still seems to be profitable. One reason for this could be that there are a vast
 # number of possible pairs and the pairs portfolio is a faction of the pairs universe. This could
 # leave unexploited pairs in the market. Pairs trading may also be difficult to scale to a level that would be attractive to institutional
 # traders, like hedge funds, so the strategy has not been arbitraged out of the market.
 # </p>
 # <p>
 # Mathematical finance often uses models that are based on normal distributions, constant means and standard deviations. Actual market
-# data is often not normally distributed and changes constantly. The statistics used to select stocks for pairs trading makes an assumption
-# that the pair distribution has a constant mean and standard deviation (e.g., the pairs spread is a stationary time series). This
-# assumption holds, at best, over a window of time. This notebook explores the statistics of the cointegrated pairs that are candidates
-# for pairs trading.
+# data is often not normally distributed and changes constantly. The statistics used to select stocks for pairs trading assume
+# that the pair distribution has a constant mean and standard deviation (e.g., the pairs spread is a stationary time series). As this notebook
+# shows, this assumption is statistically valid about forty percent of the time.
 # </p>
 # <p>
-# The statistics that predict a successful pair will not be accurate in all time periods. For the strategy to be successful, the predicition
+# The statistics that predict a successful pair will not be accurate in all time periods. For the strategy to be successful, the prediction
 # must be right more often than not. To minimize the risk in any particular trade, this suggests that trading a larger portfolio will
 # be more successful than trading a small portfolio.
 # </p>
@@ -107,25 +107,27 @@
 # S&P 500 Industry Sectors
 # </h3>
 # <p>
-# In this notebook, pairs are selected from the S&P 500 stock universe. These stocks are have a high trading volume, with a small
-# bid-ask spread. These stocks are also easier to short, with lower borrowing fees.
+# In this notebook, pairs are selected from the S&P 500 stock universe. These stocks have a high trading volume, with a small
+# bid-ask spread. S&P 500 stocks are also easier to short, with lower borrowing fees and a lower chance of a short position being called
+# back.
 # </p>
 # <p>
-# In pairs selection we are trying to find pairs that are cointegrated, where the price spread has mean reverting behavior. The stock pairs should
-# have some logical connection. In the book <i>Pairs Trading</i> the author discusses using factor models to select pairs with
+# In pairs selection we are trying to find pairs that are cointegrated, where the price spread has mean reverting behavior. Just as there
+# can be spurious correlation there can be spurious cointegration, so the stock pair should
+# have some logical connection. In the book <i>Pairs Trading</i> (Vidyamurthy) the author discusses using factor models to select pairs with
 # similar factor characteristics.
 # </p>
 # <p>
 # Factor models are often built using company fundamental factors like earnings, corporate debt and cash flow. These factors
 # tend to be generic. Many companies in completely different industry sectors may have similar fundamental factors.  When selecting pairs
-# we would like to select stocks that are affected by similar market forces. For example, oil companies in the energy sector tend to be
-# affected the same economic and market forces. Factors affecting companies outside the energy sector can be much more complicated.
-# In many cases the factors that affect S&P 500 companies are broad economic factors which are not obviously useful in choosing pairs
+# we would like to select stocks that are affected by similar market forces. For example, energy sector stocks tend to be
+# affected by the same economic and market forces. Factors affecting companies outside the energy sector can be much more complicated.
+# In many cases the company factors that affect S&P 500 companies are broad economic factors that are not obviously useful in choosing pairs
 # for mean reversion trading.
 # </p>
 # <p>
 # In lieu of specific factors, the S&P 500 industry sector is used as the set from which pairs are drawn.
-# Although not perfect, industry sector will tend to select stocks with similar behavior, while reducing the universe of
+# Although not perfect, the industry sector will tend to select stocks with similar behavior, while reducing the universe of
 # stocks from which pairs are selected.
 # </p>
 # <p>
@@ -140,11 +142,11 @@
 # GitHub repository.
 # </p>
 # <p>
-# The S&P 500 sectors are:
+# The S&P 500 industry sectors are:
 # </p>
 # <ol>
 # <li>
-# Consumer discressionary
+# Consumer discretionary
 # </li>
 # <li>
 # Consumer staples
@@ -162,7 +164,7 @@
 # Industrials
 # </li>
 # <li>
-# Info tech
+# Infotech
 # </li>
 # <li>
 # Materials
@@ -177,13 +179,18 @@
 # Utilities
 # </li>
 # </ol>
+# <p>
+# The stocks from the Barchart list include stocks for the same company, with different classes (e.g., class A, class B or class C stocks).
+# The list of stocks is filtered to remove all but the lowest stock class (e.g., if there is a class B stock, the class A stock is removed
+# from the list).
+# </p>
 # <h3>
 # Stock Market Close Data
 # </h3>
 # <p>
 # The data used to model pairs trading in this notebook uses close price data for all of the S&P 500 stocks from the start date to yesterday
-# (e.g., one day in the past). In other models (see Stock Market Cash Trigger and ETF Rotation) the stock data was downloaded the first time the
-# notebook was run and stored in temporary files.  In these notebooks the first notebook run incurred the initial overhead of downloading
+# (e.g., one day in the past). In other models (see Stock Market Cash Trigger and ETF Rotation) the close price data was downloaded the first time the
+# notebook was run and stored in temporary files.  The first notebook run incurred the initial overhead of downloading
 # the data, but subsequent runs could read the data from local temporary files.
 # </p>
 # <p>
@@ -212,7 +219,10 @@
 
 import os
 from datetime import datetime
-from multiprocessing import Pool
+# from multiprocessing import Pool
+# pathos is used as a more robust multiprocessing library
+# pip install pathos
+from pathos.multiprocessing import Pool
 from typing import List, Tuple, Dict
 
 import matplotlib.pyplot as plt
@@ -222,68 +232,27 @@ import seaborn as sns
 import statsmodels.api as sm
 from numpy import log
 from statsmodels.tsa.stattools import adfuller
+from statsmodels.tsa.vector_ar.vecm import coint_johansen
 from tabulate import tabulate
 
-from statsmodels.tsa.vector_ar.vecm import coint_johansen
-from statsmodels.tsa.stattools import adfuller
-
+from coint_analysis.coint_analysis_result import CointAnalysisResult, CointInfo
+from coint_data_io.coint_matrix_io import CointMatrixIO
 #
 # Local libraries
 #
 from plot_ts.plot_time_series import plot_ts, plot_two_ts
-from read_market_data.MarketData import MarketData
-from coint_analysis.coint_analysis_result import CointAnalysisResult, CointInfo
-from coint_data_io.coint_matrix_io import CointMatrixIO
-
-
-from utils.find_date_index import findDateIndex
+from read_market_data.MarketData import MarketData, read_s_and_p_stock_info, extract_sectors
 
 # Apply the default theme
 sns.set_theme()
 
-s_and_p_file = 's_and_p_sector_components/sp_stocks.csv'
-s_and_p_data = 's_and_p_data'
+from s_and_p_filter import s_and_p_directory, s_and_p_stock_file
+s_and_p_file = s_and_p_directory + os.path.sep + s_and_p_stock_file
+
 start_date_str = '2007-01-03'
 start_date: datetime = datetime.fromisoformat(start_date_str)
 
 trading_days = 252
-
-
-def read_s_and_p_stock_info(path: str) -> pd.DataFrame:
-    """
-    Read a file containing the information on S&P 500 stocks (e.g., the symbol, company name and sector)
-    :param path: the path to the file
-    :return: a DataFrame with columns Symbol, Name and Sector
-    """
-    s_and_p_stocks = pd.DataFrame()
-    if os.access(path, os.R_OK):
-        # s_and_p_socks columns are Symbol, Name and Sector
-        s_and_p_stocks = pd.read_csv(s_and_p_file, index_col=0)
-        new_names = [sym.replace('.', '-') for sym in s_and_p_stocks['Symbol']]
-        s_and_p_stocks['Symbol'] = new_names
-    else:
-        print(f'Could not read file {s_and_p_file}')
-    return s_and_p_stocks
-
-
-def extract_sectors(stocks_df: pd.DataFrame) -> dict:
-    """
-    Columns in the DataFrame are Symbol,Name,Sector
-    :param stocks_df:
-    :return: a dictionary where the key is the sector and the value is a list of stock symbols in that sector.
-    """
-    sector: str = ''
-    sector_l: list = list()
-    stock_sectors = dict()
-    for t, stock_info in stocks_df.iterrows():
-        if sector != stock_info['Sector']:
-            if len(sector_l) > 0:
-                stock_sectors[sector] = sector_l
-                sector_l = list()
-            sector = stock_info['Sector']
-        sector_l.append(stock_info['Symbol'])
-    stock_sectors[sector] = sector_l
-    return stock_sectors
 
 
 def calc_pair_counts(sector_info: dict) -> pd.DataFrame:
@@ -323,7 +292,7 @@ def calc_pair_counts(sector_info: dict) -> pd.DataFrame:
 stock_info_df = read_s_and_p_stock_info(s_and_p_file)
 stock_l: list = list(set(stock_info_df['Symbol']))
 stock_l.sort()
-market_data = MarketData(start_date=start_date, path=s_and_p_data)
+market_data = MarketData(start_date=start_date)
 
 # Get close prices for the S&P 500 list
 close_prices_df = market_data.get_close_data(stock_l)
@@ -370,14 +339,14 @@ print(tabulate(pairs_info_df, headers=[*pairs_info_df.columns], tablefmt='fancy_
 # Lookback Time Period
 # </h3>
 # <p>
-# Pairs are selected for trading using a lookback period. The longer the lookback period (with more data points) the
+# Pairs are selected for trading using a lookback period. The longer the lookback period, the
 # less error there will be in the selection statistics, assuming that the data is stable
 # (e.g., constant mean and standard deviation).  Stock price time series are not stable over time, however. The mean and the
-# standard deviation changes, as do other statistics like correlation and mean reversion.
+# standard deviation change, as do other statistics like correlation and cointegration (mean reversion).
 # </p>
 # <p>
 # In using a lookback period to choose trading pairs we are making the assumption that the past
-# will resemble the future trading period (this notebook explores the reliability of this assumption).
+# will resemble the future trading period (as we shall see, this is not true in the majority of cases).
 # The longer the lookback period, the less likely it is that the statistics will match
 # the trading period. This creates a tension between statistical accuracy and statistics that are more likely to reflect
 # the future trading period.
@@ -392,10 +361,7 @@ print(tabulate(pairs_info_df, headers=[*pairs_info_df.columns], tablefmt='fancy_
 # Mean Reversion
 # </h2>
 # <p>
-# A single stock price (or log price) series is rarely stationary and mean reverting.
-# In selecting stock pairs we are looking for a stock pair with a spread time series that is stationary and mean reverting. A stationary time series
-# is a time series that has a constant mean and standard deviation. Stock time series are constantly changing, so we are looking for
-# a pair that has a spread that is stationary and mean reverting over the back test period.
+# A single stock price series is rarely stationary and mean reverting. In pairs trading, we are looking for stock pairs where the stock price spread time series is stationary and mean in the in-sample (lookback) period. We are making a bet that the spread time series will also be stationary and mean reverting in the out-of-sample trading period.
 # </p>
 # <p>
 # When a pair forms a mean reverting, stationary time series, it is referred to as a cointegrated time series.
@@ -424,29 +390,25 @@ print(tabulate(pairs_info_df, headers=[*pairs_info_df.columns], tablefmt='fancy_
 #
 # \$ s > \mu + \delta \space when \space P_A > \beta P_B \space (short \space P_A, \space long \space P_B) $
 #
-# \$ s < \mu + \delta \space when \space P_A < \beta P_B \space (long \space P_A, \space sort \space P_B) $
+# \$ s < \mu - \delta \space when \space P_A < \beta P_B \space (long \space P_A, \space sort \space P_B) $
 #
 # <p>
-# When <i>s</i> is above the mean at some level (perhaps one standard deviation), a short position will be taken in stock A
-# and a long position will be taken in stock B.  When <i>s</i> is below the mean at some level (perhaps one standard deviation)
-# a long position will be taken in stock A and a short position will be taken in stock B. The position taken in stock B will be
-# larger than the postion in stock A by a factor of β.
+# When s is above the mean at some level, delta (perhaps one standard deviation), a short position will be taken in stock A and a long position will be taken in β shares of stock B. When s is below the mean at some level (perhaps one standard deviation) a long position will be taken in stock A and a short position will be taken in β shares of stock B.
 # </p>
 # <p>
-# In identifying a pair for pairs trading a determination is made on whether <i>s</i> is mean reverting.  The process of determining
+# In identifying a pair for pairs trading, a determination is made on whether <i>s</i> is mean reverting.  The process of determining
 # mean reversion will also provide the value of β.
 # </p>
 # <h2>
 # Testing for Cointegration and Mean Reversion
 # </h2>
 # <p>
-# Pairs are selected from a common industry sector. This means that there is a good chance that the two stocks are affected by
-# similar market or economic dynamics. Once a pair with high correlation is identified, the next step is to test whether the
-# pair is cointegrated and mean reverting. Two tests are commonly used to test for mean reversion:
+# Highly correlated pairs are selected from a common industry sector.  Once a pair with high correlation is identified, the next step
+# is to test whether the pair is cointegrated and mean reverting. Two tests are commonly used to test for mean reversion:
 # </p>
 # <ol>
 # <li>
-# Engle-Granger Test: Linear Regression and the Augmented Dickey Fuller (ADF) test
+# Engle-Granger Test: Linear Regression and the Augmented Dickey-Fuller (ADF) test
 # </li>
 # <li>
 # The Johansen Test
@@ -456,27 +418,26 @@ print(tabulate(pairs_info_df, headers=[*pairs_info_df.columns], tablefmt='fancy_
 # Each of these tests has advantages and disadvantages, which will be discussed below.
 # </p>
 # <h3>
-# Engle-Granger Test: Linear Regression and the Augmented Dickey Fuller Test
+# Engle-Granger Test: Linear Regression and the Augmented Dickey-Fuller Test
 # </h3>
 # <p>
 # Two linear regressions are performed on the price series of the stock pair. The residuals of the regression with the highest
-# slope are tested with the Augmented Dickey Fuller (ADF) test to determine whether mean reversion is likely.
+# slope are tested with the Augmented Dickey-Fuller (ADF) test to determine whether mean reversion is likely.
 # </p>
 # <p>
-# Linear regression is designed to provide a measure of the effect of a dependent variable (on the x-axis) to the independent
-# variable (on the y-axis).  An example might be the body mass index (a measure of body fat) on the x-axis to the blood cholesterol
-# on the y-axis.
+# Linear regression is designed to provide a measure of the effect of a dependent variable (on the x-axis) on the independent
+# variable (on the y-axis). An example might be body mass index (a measure of body fat) on the x-axis and blood cholesterol on the y-axis.
 # </p>
 # <p>
-# In looking for stock pairs, we pick pairs that have relatively high correlation from a common industry sector, which means that some
+# In selecting pairs, we pick pairs with a high correlation from the same industry sector. This means that some
 # process is acting on both stocks. However, the movement of one stock does not necessarily cause movement in the other stock. Also,
-# both stock price series tend to be driven by an underlying random process. This means that linear regression is not perfectly suited
-# for analyzing pairs. Two linear regressions are performed since we don't know which stock to pick for the dependent variable. The regression
+# both stock price series are driven by an underlying random process. This means that linear regression is not perfectly suited
+# for analyzing pairs. Two linear regressions are performed since we don't know which stock to pick as the dependent variable. The regression
 # with the highest slope is used to analyze mean reversion and build the cointegrated time series.
 # </p>
 # <p>
-# The result of the (Engle) Granger test is the weight value for the equation above, the linear regression intercept and
-# an estimate for the mean reversion confidence.
+# The result of the (Engle) Granger test the linear regression slope is the weight value for the equation above. A linear regression
+# intercept is also available, along with the confidence level of the cointegration process (e.g., 90%, 95% and 99% confidence).
 # </p>
 #
 
@@ -657,9 +618,10 @@ cor_df.index = ['2007']
 # Example: AAPL/MPWR
 # </h3>
 # <p>
-# AAPL (Apple Inc), MPWR (Monolithic Power Systems, Inc) are in the technology industry sector.  YUM (Yum brands is a food company in a
-# different industry sector). The correlations with AAPL in the first half of 2007 are shown below.  AAPL and MPWR are both technology sector
-# stocks, while YUM brands is a food company. Other than overall stock market dynamics, we would not expect AAPL and YUM to be correlated.
+# AAPL (Apple Inc) and MPWR (Monolithic Power Systems, Inc) are in the technology industry sector.  YUM (Yum brands) is a food company in a
+# different industry sector. The correlations of MPWR and YUM with AAPL in the first half of 2007 are shown below.  AAPL and MPWR are both technology sector
+# stocks, while YUM brands is a food company. Other than overall stock market dynamics, we would not expect AAPL and YUM to be correlated, so this
+# appears to be an example of false correlation.
 # </p>
 
 # +
@@ -711,14 +673,14 @@ stationary_df = pair_stat.stationary_series(data_a=data_a, data_b=data_b, coint_
 # -
 
 # <p>
-# The condidence level represents the error percent. So 1 = 1% error or 99% confidence, 5 = 5% or 95% confidence and 10 = 10% or
+# The confidence level represents the error percentage. So 1 = 1% error or 99% confidence, 5 = 5% or 95% confidence and 10 = 10% or
 # 90% confidence.
 # </p>
 # <p>
 # The plot below shows the stationary spread time series formed by
 # </p>
 #
-# \$  m = MPWR - intercept - 3.7 * AAPL $
+# \$  s = MPWR - intercept - 3.7 * AAPL $
 #
 # <p>
 # The dotted lines are a plus one and minus one standard deviation. The intercept adjusts the time series so that the mean is zero.
@@ -732,11 +694,11 @@ plot_stationary_ts(stationary_df=stationary_df, plus_delta=std_dev, minus_delta=
 # -
 
 # <p>
-# AAPL and MPWR are both technology stocks that have related businesses (MPWR's products are used by companies like Apple). We would
+# AAPL and MPWR are both technology stocks that have some overlapping businesses (MPWR's products are used by companies like Apple). We would
 # expect that the two stocks might be cointegrated.
 # </p>
 # <p>
-# The test for cointegration is performed in a lookback period. The next period is the trading period were the close prices of the
+# The test for cointegration is performed in a lookback period. The next period is the trading period where the close prices of the
 # pair are combined with the weight (and perhaps the intercept) to form what we hope will be a stationary mean reverting time series
 # that can be profitably traded.
 # </p>
@@ -772,7 +734,7 @@ print(f'Granger test for cointegration (AAPL/YUM): {coint_data_granger_aapl_yum}
 # correlation can be used as a first filter for pairs.
 # </p>
 # <p>
-# The tests for cointegration may find that a pair with a low low correlation value is cointegrated and mean reverting. One
+# The tests for cointegration may find that a pair with a low correlation value is cointegrated and mean reverting. One
 # example is AAPL and technology sector stock GPN (Global Payments Inc.)  For the first half of 2007, AAPL and GPN have
 # a low correlation.
 # </p>
@@ -852,29 +814,28 @@ print(f'Granger test for cointegration (AAPL/GPN): second half of 2007 {coint_da
 # The Granger linear regression based test can only be used for two assets. The Johansen test can be used on more than two assets.
 # </p>
 # <p>
-# The Johansen test uses eigenvalue decomposition for the estimation of cointegration. In contract to the Granger test which has two steps:
+# The Johansen test uses eigenvalue decomposition for the estimation of cointegration. In contrast to the Granger test which has two steps:
 # linear regression and the ADF test, the Johansen test is a single step test that also provides the weight factors. There is no linear
 # constant (regression intercept) as there is with the Granger test, so the Johansen result may not have a mean of zero.
 # </p>
 # <p>
 # The Johansen test and the Granger test do not always agree. The Johansen test is applied to AAPL/MPWR for the close prices from the first
-# half of 2007. The Johansen test shows no cointegration, although the Granger test showed cointegeration at the 99% confidence level.
+# half of 2007. The Johansen test shows no cointegration, although the Granger test showed cointegration at the 99% confidence level.
 # </p>
 
 coint_data_johansen_aapl_mpwr = pair_stat.johansen_coint(data_a=d2007_aapl, data_b=d2007_mpwr)
 print(f'Johansen test for cointegration (AAPL/MPWR), first half of 2007 : {coint_data_johansen_aapl_mpwr}')
 
 # <p>
-# Looking that the literature, there doesn't seem to be a consensus on whether the Granger or Johansen tests are better. Some authors suggest
-# using both tests, but they don't provide any emperical insight into why this is advantageous.
+# In the research papers on cointegration, there doesn't seem to be a consensus on whether the Granger or
+# Johansen tests are better. Some authors suggest using both tests, but they don't provide any empirical insight into why this might be advantageous.
 # </p>
 #
 # <h2>
 # Correlation
 # </h2>
 # <p>
-# After selecting stocks based on their industry sector, the next filter used is the pair correlation of the
-# natural log of the close prices.
+# After selecting stocks based on their industry sector, the next filter used is the pair correlation of the close prices.
 # </p>
 # <p>
 # Stocks that are strongly correlated are more likely to also exhibit mean reversion since they have similar market behavior.
@@ -1003,7 +964,7 @@ apple_corr_df = apple_corr_result.corr_df
 # pairs will be tested for correlation over the lookback period.
 # </p>
 # <p>
-# Correlation is calculated on the log of the price for each stock pair.
+# Correlation is calculated price for each stock pair.
 # </p>
 # <p>
 # The windowed correlation is not stable. The plot below shows the correlation between two stocks, AAPL and MPWR, over windowed
@@ -1068,7 +1029,7 @@ display_histogram(cor_a, 'Correlation between pairs', 'Count')
 # well.
 # </p>
 # <p>
-# The plot below shows the number of pairs, in a half year time period period, with a correlation above a particular cutoff.
+# The plot below shows the number of pairs, in a half year time period, with a correlation above a particular cutoff.
 # </p>
 
 # +
@@ -1089,8 +1050,7 @@ plot_two_ts(data_a=cor_dist_df, data_b=spy_close_df, title=f"Number of pairs wit
 # -
 
 # <p>
-# In the plot above, about 75% of the pairs are highly correlated around 2008. The corresponds to the 2008-2009 stock market crash
-# caused by the financial crisis. This lends validity to the financial market maxim that in a market crash all assets become correlated.
+# In the plot above, about 75% of the pairs are highly correlated around 2008. This corresponds to the 2008–2009 stock market crash caused by the financial crisis. The high correlation around the crash lends validity to the financial market maxim that in a market crash, all assets become correlated.
 # </p>
 # <p>
 # To the extent that correlation is a predictor for mean reversion, this also suggests that mean reversion statistics may be volatile.
@@ -1153,7 +1113,7 @@ class CalcPairsCointegration:
         :param corr_df: a data frame of pairs correlation values, where the index is the date and
                         the columns are the pairs
         :param window:  the look back window
-        :return: a data frame of tuples composed of a correlation value and the granger and johansen cointegeration
+        :return: a data frame of tuples composed of a correlation value and the granger and johansen cointegration
                  objects.
         """
         if self.coint_matrix_io.has_files():
@@ -1223,27 +1183,27 @@ class Statistics:
         # Number of pairs with in-sample correlation >= cutoff, in-sample Granger AND Johansen and serial cointegration
         self.granger_and_johansen_serial_coint: int = 0
         # Number of pairs with correlation >= cutoff and in-sample granger = 90
-        self.granger_coint_90: int = 0;
+        self.granger_coint_90: int = 0
         # Number of pairs with correlation >= cutoff, in-sample granger = 90 and serial cointegrated
         self.granger_serial_coint_90: int = 0
         # Number of pairs with correlation >= cutoff and in-sample granger = 95
-        self.granger_coint_95: int = 0;
+        self.granger_coint_95: int = 0
         # Number of pairs with correlation >= cutoff, in-sample granger = 95 and serial cointegrated
         self.granger_serial_coint_95: int = 0
         # Number of pairs with correlation >= cutoff and in-sample granger = 99
-        self.granger_coint_99: int = 0;
+        self.granger_coint_99: int = 0
         # Number of pairs with correlation >= cutoff, in-sample granger = 99 and serial cointegrated
         self.granger_serial_coint_99: int = 0
         # Number of pairs with correlation >= cutoff and in-sample Johansen = 90
-        self.johansen_coint_90: int = 0;
+        self.johansen_coint_90: int = 0
         # Number of pairs with correlation >= cutoff, in-sample johansen = 90 and serial cointegrated
         self.johansen_serial_coint_90: int = 0
         # Number of pairs with correlation >= cutoff and in-sample Johansen = 95
-        self.johansen_coint_95: int = 0;
+        self.johansen_coint_95: int = 0
         # Number of pairs with correlation >= cutoff, in-sample johansen = 95 and serial cointegrated
         self.johansen_serial_coint_95: int = 0
         # Number of pairs with correlation >= cutoff and in-sample Johansen = 99
-        self.johansen_coint_99: int = 0;
+        self.johansen_coint_99: int = 0
         # Number of pairs with correlation >= cutoff, in-sample johansen = 99 and serial cointegrated
         self.johansen_serial_coint_99: int = 0
 
@@ -1448,7 +1408,7 @@ stats = calc_statistics.traverse(coint_info_df=coint_info_df)
 # Stability of Correlation
 # </h3>
 # <p>
-# For pairs trading to be a profitable strategy the statistics that are observed over a past period must persists into a future period often
+# For pairs trading to be a profitable strategy the statistics that are observed over a past period must persist into the next time period often
 # enough to be profitable.  If a pairs forms a stationary mean reverting time series in a past period, profitable pairs trading relies
 # on this statistic holding over the out-of-sample trading period (often enough to be profitable).
 # </p>
@@ -1479,7 +1439,7 @@ print(tabulate(correlation_depend_df, headers=[*correlation_depend_df.columns], 
 # Computation
 # </h3>
 # <p>
-# For every pair the correlation, granger cointegration and johansen cointegeration is calculated. The calculation is very compute intensive
+# For every pair the correlation, granger cointegration and johansen cointegration are calculated. The calculation is very compute intensive
 # and Python is notorious for being slow compared to C++ and Java (Python does, however, have lots of support for statistics and data analysis).
 # I have only succeeded in successfully doing this calculation in a single Python thread.  I tried to use Python's Pool parallelism which would
 # allow me to run the calculation in parallel on the 16-CPU cores on my Linux system. Unfortunately this resulted in a segment fault
@@ -1501,7 +1461,7 @@ print(tabulate(correlation_depend_df, headers=[*correlation_depend_df.columns], 
 # high correlation are selected for cointegration testing).
 # </p>
 # <p>
-# The histograms below show the replationship between correlation and cointegration, in the same half-year, in-sample period.
+# The histograms below show the relationship between correlation and cointegration, in the same half-year, in-sample period.
 # </p>
 
 # +
@@ -1517,13 +1477,13 @@ display_histogram(correlation_and_cointegration_a, 'Correlation with Granger OR 
 
 # <p>
 # The histogram plot above shows that there is a strong relationship between correlation and cointegration. That is, highly correlated
-# pairs are more likely to be cointegerated.
+# pairs are more likely to be cointegrated.
 # </p>
 # <p>
 # The histogram also shows that there are cointegration is much more common with higher positive correlation.
 # </p>
 # <p>
-# The histogram below shows the replationship between correlation and cointegration where cointegration meets both the Granger
+# The histogram below shows the relationship between correlation and cointegration where cointegration meets both the Granger
 # and Johansen tests (e.g., Granger AND Johansen cointegration).
 # </p>
 
@@ -1551,7 +1511,7 @@ stats.pair_count_df.plot(kind='bar', figsize=(12,10))
 # </p>
 #
 # <h2>
-# Stability of Cointegeration
+# Stability of Cointegration
 # </h2>
 # <p>
 # Cointegration for a pair is calculated over an in-sample look-back period. When a pair is found to be cointegrated, trading takes place
@@ -1559,7 +1519,7 @@ stats.pair_count_df.plot(kind='bar', figsize=(12,10))
 # takes place over a three month out-of-sample period following the look-back period.
 # </p>
 # <p>
-# For a cointegrated pair, the spread time series is, in an ideal world, a stationary time series with a constant mean and standard deviation.
+# For a cointegrated pair, the spread time series is a stationary time series with a constant mean and standard deviation.
 # The spread time series is mean reverting, so that divergences from the mean return to the mean. The statistics of the spread time series,
 # in an ideal world, are consistent between the look-back period and the trading period.
 # </p>
@@ -1609,8 +1569,10 @@ coint_stats_df.index = ['Granger', 'Johansen', 'Granger or Johansen', 'Granger a
 
 # -
 
+# <p>
 # The table below shows the relationship between cointegration in the in-sample six month period and cointegration in the six month out of
 # sample (trading) period.
+# </p>
 
 # +
 
@@ -1652,9 +1614,13 @@ coint_conf_df.index = ['Granger 90%', 'Granger 95%', 'Granger 99%', 'Johansen 90
 
 # -
 
+# <p>
 # The table below shows the relationship between the cointegration confidence intervals in the in-sample period and
-# cointegration in the out-of-sample trading period. This table provides information on whether higher confidence
-# in cointegration provides better predictive power for the out-of-sample period.
+# cointegration in the out-of-sample trading period.
+# </p>
+# <p>
+# The results in this table show that the in-sample confidence interval does not seem to predict out-of-sample cointegration.
+# </p>
 
 # +
 
@@ -1685,45 +1651,6 @@ print(tabulate(coint_conf_df, headers=[*coint_conf_df.columns], tablefmt='fancy_
 # Since the Granger and Johansen tests produce very similar results. I prefer the Granger test because it is easier to understand and
 # provides an intercept value, which tends to produce a spread series with a mean of zero. Higher cointegration confidence intervals do
 # not deliver higher serial cointegration, so a simple test for a non-zero confidence interval can be used.
-# </p>
-# <h3>
-# An Algorithm of Selecting Pairs
-# </h3>
-# <p>
-# Based on the statistical observation from the data above, I can propose the following algorithm to select pairs. These criteria
-# are applied to the in-sample data (the past half year). Trading takes place in the next time period (the out-of-sample) period.
-# </p>
-# <p>
-# A three month trading period is used. This time period, rather than a six month time period, is chosen because a shorter time period
-# is more likely to have consistent statistics with the in-sample time period. A shorter time period also allows the statistical tests
-# to be run more often. The shorter time period limits the time that pairs are held. An open pair position that does not mean revert will
-# be closed at the end of the three month trading period.
-# </p>
-# <ol>
-# <li>
-# Filter pairs for high correlation
-# </li>
-# <li>
-# Use the Granger test to identify pairs that are cointegrated (at any confidence level)
-# </li>
-# </ol>
-# <p>
-# After selecting highly correlated, cointegrated pairs there will (historically) be between 700 and 1500 pairs, which are far more than
-# can be traded by a retail trader.  To reduce the number of pairs the following additional filters are applied.
-# </p>
-# <ol>
-# <li>
-# Select the top N pairs by the volatility of the pair spread (sorted by high volatility).
-# </li>
-# <li>
-# Select the top M pairs by halflife of the pair spread (sorted by low halflife).
-# </li>
-# </ol>
-# <p>
-# High volatility pairs are selected based on the speculation that these stocks will yield the highest profit.
-# </p>
-# <p>
-# Pairs with short halflives may have more rapid mean reversion, providing more trading opportunities.
 # </p>
 #
 
@@ -1821,29 +1748,111 @@ half_life_calc = HalflifeCalculation(coint_info_df=coint_info_df,
 halflife_a = half_life_calc.half_life_distribution()
 halflife_df = pd.DataFrame(halflife_a)
 halflife_df.columns = ['Spread Halflife']
-halflife_df.plot(kind='hist', xlabel='Spread Half-life', figsize=(10, 6))
-pass
 
 # -
 
+# <p>
+# The plot below shows the half-life distribution mean reverting spread for pairs with a correlation greater than or equal to 0.75.  Negative
+# half-life values and values that are greater than eight standard deviations are filtered out.
+# </p>
+# <p>
+# This distribution shows the half-life values for all time periods (from 2007 through 2022) for all highly correlated pairs. Given the number
+# of values, we can assume statistical significance.
+# </p>
+
+# +
+
+halflife_df.plot(kind='hist', xlabel='Spread Half-life', figsize=(10, 6))
+pass
+# -
+
+# <p>
+# I am skeptical about the validity of the half-life statistics.  The histogram plot shows most of the half-life values clustered around 4.
+# I would have more confidence in a distribution that included a wider range of values that are less skewed.
+# </p>
+# <p>
+# The half-life statistic may be useful in weeding out problematic spread time series. For example, a spread with a negative half-life can
+# be discarded. Similarly, a half-life greater than 10 could also be discarded.
+# </p>
 # <h2>
-# Pairs Trading and the Problems of Mathematical Finance
+# Pairs Trading and Delusions in Mathematical Finance
 # </h2>
 # <p>
 # Mathematical finance often assumes normal distributions and statistics that are constant (constant mean and standard deviation, for example).
-# If the assumptions involving constant statistics were actually true, it would be much easier to make money (except for the fact that mathematical
-# finance would assume that these opportunities would have already been arbitraged out).
+# If these assumptions were actually true, it would be much easier to make money (except for the fact that mathematical finance would assume
+# that these opportunities would have already been arbitraged out).
 # </p>
 # <p>
-# The statistics examined in this notebook are not constant. There are wide variations in correlation between time periods. Cointegration is also
-# not constant from one time period to another. In fact, in 60% of the cases a pair that is cointegrated in one time period is not cointegrated in
-# the following time period.
+# The assumptions made in mathematical finance often exist because they allow closed-form (e.g., equation-based) solutions to finance problems.
+# The fact that these assumptions are wrong in most cases is often ignored.
 # </p>
 # <p>
-# The mathematical finance papers on mean reversion are written for a world where the spread between two mean reverting assets is a stationary
-# Ornstein-Uhlenbeck process. This world may exist looking backward at in-sample data. For out-of-sample data, these statistics break down, as
-# demonstrated in this paper. The statistical characteristics of the past in-sample period often do not describe the out-of-sample trading period.
+# Often the correlation and cointegration statistics are not constant between the in-sample and out-of-sample periods. In the case of correlation,
+# there can be wide variations between adjacent time periods. Cointegration is also not constant from one time period to another.
+# In fact, in 60% of the cases, a pair that is cointegrated in one time period is not cointegrated in the following time period.
 # </p>
+# <h2>
+# An Algorithm for Selecting Pairs
+# </h2>
+# <p>
+# Based on the statistical observation from the data above, I can propose the following algorithm to select pairs. These criteria
+# are applied to the in-sample data (the past half year). Trading takes place in the next time period (the out-of-sample) period.
+# </p>
+# <p>
+# A three month trading period is used. This time period, rather than a six month time period, is chosen because a shorter time period
+# is more likely to have consistent statistics with the in-sample time period. A shorter time period also allows the statistical tests
+# to be run more often. The shorter time period limits the time that pairs are held. An open pair position that does not mean revert will
+# be closed at the end of the three month trading period.
+# </p>
+# <p>
+# On average only 40% of the pairs that are cointegrated in the in-sample time period will be co-integrated in the out-of-sample
+# time period (e.g., the trading period). This suggests that a sufficient number of pairs must be traded to take advantage of
+# the 40% cointegration that can be expected.
+# </p>
+# <p>
+# For 60% of the pairs traded (on average) there will not be cointegration and mean reversion in the out-of-sample trading period.
+# In order for the pairs trading strategy to be successful the profit from the mean reverting pairs must be higher
+# than the losses from the pairs that do not mean revert.
+# A market neutral weighting is used for all of the pairs that are traded, so there is some reason to expect that the pairs that
+# do not mean will have, on average, a return near zero.
+# </p>
+# <p>
+# The pairs trading strategy seeks to profit from the pairs that mean revert on average 40% of the time (while the other pairs are,
+# we hope, market neutral).  This suggests that the strategy will do better if we make lots of small "bets" (perhaps trading
+# 100 pairs). Making lots of small bets also reduces the risk from company factors. For example, if one of the pairs selected included
+# Tesla (TSLA) there could be losses due to the post Twitter purchase "Elon Musk factor". However, if the investment in the pair is small
+# the loss would also be small.
+# </p>
+# <p>
+# The algorithm for pairs trading is outlined below.
+# </p>
+# <ol>
+# <li>
+# Select pairs from an S&P 500 industry sector.
+# </li>
+# <li>
+# Filter pairs for high correlation (correlation greater than or equal to 0.75).
+# </li>
+# <li>
+# Use the Granger test to identify pairs that are cointegrated (at any confidence level)
+# </li>
+# </ol>
+# <p>
+# After selecting highly correlated, cointegrated pairs there will (historically) be between 700 and 1500 pairs, which are far more than
+# can be traded by a retail trader.  To reduce the number of pairs the following additional filters are applied.
+# </p>
+# <ol>
+# <li>
+# Discard any pairs with a spread time series half-life that is negative or larger than 10.
+# </li>
+# <li>
+# Select the top N pairs by the volatility of the pair spread (sorted by high volatility).
+# </li>
+# </ol>
+# <p>
+# High volatility pairs are selected based on the speculation that these stocks will yield the highest profit.
+# </p>
+#
 
 #
 # <h2>
@@ -1857,51 +1866,57 @@ pass
 # Algorithmic Trading: Winning Strategies and Their Rationale by Ernie Chan, 2013, Wiley Publishing
 # </li>
 # <li>
+# <p>
 # <a href="https://medium.com/@financialnoob/granger-causality-test-in-pairs-trading-bf2fd939e575">Granger causality test in pairs trading</a> by
-# Alexander Pavlov (behind the Medium paywall)
-# </li>
-# <li>
-# <a href="https://letianzj.github.io/cointegration-pairs-trading.html">Quantitative Trading and Systematic Investing by Letian Wang</a> This
-# post includes a discussion on how the results of Johansen cointegration can be interpreted.
-# </li>
-# <li>
-# <a href="https://www.quantrocket.com/codeload/quant-finance-lectures/quant_finance_lectures/Lecture42-Introduction-to-Pairs-Trading.ipynb.html">Introduction to Pairs Trading</a> by Delaney Mackenzie and Maxwell Margenot
-# </li>
-# <li>
-# <p>
-# <a href="https://quantdevel.com/pdf/betterHedgeRatios.pdf">Better Hedge Ratios for Spread Trading</a>, by Paul Teetor, November 2011
+# Alexander Pavlov (behind the Medium paywall).
 # </p>
 # <p>
-# This note discusses the problem of using ordinary least squares to produce a hedge ratio.
+# In this paper the Granger causality test is used to select stocks from the VBR Small-Cap ETF. The result is a yearly return of about
+# 28% and a Sharpe ratio of 1.7.
 # </p>
 # </li>
 # <li>
-# <a href="http://jonathankinlay.com/2019/02/pairs-trading-part-2-practical-considerations/">Pairs Trading – Part 2: Practical Considerations</a> by Jonathan Kinlay
+# <p>
+# <a href="https://letianzj.github.io/cointegration-pairs-trading.html">Quantitative Trading and Systematic Investing by Letian Wang</a>
+# </p>
+# <p>
+# This post includes a discussion on how the results of Johansen cointegration can be interpreted.
 # </li>
 # <li>
-# <a href="https://www.quantconnect.com/tutorials/strategy-library/intraday-dynamic-pairs-trading-using-correlation-and-cointegration-approach">Intraday Dynamic Pairs Trading using Correlation and Cointegration</a>
+# <p>
+# <a href="http://jonathankinlay.com/2019/02/pairs-trading-part-2-practical-considerations/">Pairs Trading – Part 2: Practical Considerations</a> by Jonathan Kinlay  This is a practitioner's view of pairs trading. (email: jkinlay@gmail.com)
+# </p>
+# <p>
+# This post discusses some of the challenges and pitfalls in pairs trading.
+# </p>
 # </li>
 # <li>
-# <a href="https://bsic.it/pairs-trading-building-a-backtesting-environment-with-python/">Pairs Trading: building a backtesting environment with Python</a>
-# </li>
-# <li>
+# <p>
 # <a href="https://www.sciencedirect.com/science/article/pii/S037843712100964X">Applying Hurst Exponent in pair trading strategies
 # on Nasdaq 100 index</a>
 # by Quynh Bui and Robert Ślepaczuk
+# </p>
+# <p>
+# The results in this article show that filtering pairs using the Hurst exponent value is superior to using
+# cointegration. I've included this article in the references because it contradicts many articles that use
+# cointegration. The overall results of unleveraged pairs trading shown in this article are poor.
+# </p>
 # </li>
 # <li>
+# <p>
 # <a href="https://www.sciencedirect.com/science/article/pii/S2214845021000880">Pairs trading: is it applicable to exchange-traded funds?</a>
+# </p>
+# <p>
+# This article looks at pairs trading of ETFs. Some authors have suggested that cointegration is more persistent with ETFs.
+# </p>
 # </li>
 # <li>
-# <a href="https://hudsonthames.org/an-introduction-to-cointegration/">An Introduction to Cointegration for Pairs Trading By Yefeng Wang</a>
-# </li>
-# <li>
-# <a href="https://www.tradelikeamachine.com/blog/cointegration-pairs-trading/part-1-using-cointegration-for-a-pairs-trading-strategy"><i>Using Cointegration for a Pairs Trading Strategy</i> Martyn Tinsley</a>
-# </li>
-# <li>
+# <p>
 # <a href="https://www.inf.ovgu.de/inf_media/downloads/forschung/technical_reports_und_preprints/2014/02_2014.pdf">Cointegration Analysis
 # of Financial Time Series Data by Johannes Steffen, Pascal Held and Rudolf Kruse, 2014</a>
-# <li>
-# <a href="https://robotwealth.com/practical-pairs-trading/">Pairs Trading on the Robot Wealth blog by Kris Longmore</a>
+# </p>
+# <p>
+# Pairs trading in the Foreign Exchange (FX) market.
+# </p>
 # </li>
 # </ol>
