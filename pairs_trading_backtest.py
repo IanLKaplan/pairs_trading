@@ -455,3 +455,4 @@ class PeriodBacktest:
             spread = close_a - weight * close_b
             coint_pair.mean = np.mean(spread)
             coint_pair.stddev = np.std(spread)
+
