@@ -298,6 +298,8 @@ from plot_ts.plot_time_series import plot_ts, plot_two_ts
 from read_market_data.MarketData import MarketData, read_s_and_p_stock_info, extract_sectors
 
 from s_and_p_filter import s_and_p_directory, s_and_p_stock_file
+from utils.find_date_index import findDateIndex
+
 s_and_p_file = s_and_p_directory + os.path.sep + s_and_p_stock_file
 
 start_date_str = '2007-01-03'
@@ -326,16 +328,26 @@ sectors = extract_sectors(final_stock_info_df)
 
 pairs_list = get_pairs(sectors)
 
-pass
 
-class PairsStatistics:
+class CointData:
 
-    def __init__(self, period_close_prices_df: pd.DataFrame):
+    def __init__(self, stock_a: str, stock_b: str, weight: float ):
+        self.stock_a: str = stock_a
+        self.stock_b: str = stock_b
+        self.weight: float = weight
+        self.mean: float = 0.0 # mean of the spread
+        self.stddev: float = 0.0 # standard deviation of the spread
+
+
+class PairStatistics:
+
+    def __init__(self, period_close_prices_df: pd.DataFrame) -> None:
         """
         :param period_close_prices_df: close prices for an in-sample period
         """
         self.close_prices: pd.DataFrame = period_close_prices_df
         self.stock_list = self.close_prices.columns
+        self.decimals = 2
 
 
     def pair_correlation(self, pair: Tuple) -> float:
@@ -352,3 +364,94 @@ class PairsStatistics:
             c = np.corrcoef(data_a, data_b)
             correlation = round(c[0, 1], 2)
         return correlation
+
+    def check_coint(self, coint_stat: float, critical_vals: dict) -> bool:
+        """
+        :param coint_stat: the ADF statistic
+        :param critical_vals: a dictionary defining the ADF intervals {'1%': -3.49, '5%': -2.89, '10%': -2.58}. The
+                              dictionary values may be either positive or negative.
+        :return: if the adf_stat is in the critical value range, return True, False otherwise
+        """
+        cointegrated = False
+        abs_coint_stat = abs(coint_stat)
+        for key, value in critical_vals.items():
+            abs_value = abs(value)
+            if abs_coint_stat > abs_value:
+                cointegrated = True
+        return cointegrated
+
+    def engle_granger_coint(self, pair: Tuple) -> CointData:
+        coint_data = None
+        stock_A: str = pair[0]
+        stock_B: str = pair[1]
+        if stock_A in self.stock_list and stock_B in self.stock_list:
+            close_a = self.close_prices[stock_A]
+            close_b = self.close_prices[stock_B]
+            close_b_const = sm.add_constant(close_b)
+            # x = I + b * A
+            result_ab = sm.OLS(close_a, close_b_const).fit()
+            close_a_const = sm.add_constant(close_a)
+            # x = I + b * B
+            result_ba = sm.OLS(close_b, close_a_const).fit()
+            slope_ab = result_ab.params[stock_B]
+            slope_ba = result_ba.params[stock_A]
+            result = result_ab
+            slope = slope_ab
+            if slope_ab < slope_ba:
+                t = stock_A
+                stock_A = stock_B
+                stock_B = t
+                result = result_ba
+                slope = slope_ba
+            slope = round(slope, self.decimals)
+            residuals = result.resid
+            adf_result = adfuller(residuals)
+            adf_stat = round(adf_result[0], self.decimals)
+            critical_vals = adf_result[4]
+            cointegrated = self.check_coint(adf_stat, critical_vals)
+            if cointegrated:
+                coint_data = CointData(stock_a=stock_A, stock_b=stock_B, weight=slope)
+        return coint_data
+
+
+class PeriodBacktest:
+
+    def __init__(self, close_prices_df: pd.DataFrame, start_date: datetime, window: int, corr_cutoff: float) -> None:
+        self.corr_cutoff = corr_cutoff
+        index = close_prices_df.index
+        start_ix = findDateIndex(date_index=index, search_date=start_date)
+        assert(start_ix >= 0)
+        self.period_close_df = close_prices_df.iloc[start_ix: start_ix + window]
+        self.pairs_stats = PairStatistics(self.period_close_df)
+
+    def select_pairs(self, pairs_list: List[Tuple]) -> List[CointData]:
+        """
+        Select pairs with high correlation and cointegratoin
+        :param pairs_list: a list of pairs
+        :return: a list of CointData for pairs that have a correlation greater than self.corr_cutoff and
+        are cointegrated.
+        """
+        coint_list: List = list()
+        for pair in pairs_list:
+            pair_cor = self.pairs_stats.pair_correlation(pair)
+            if pair_cor >= self.corr_cutoff:
+                coint_data = self.pairs_stats.engle_granger_coint(pair)
+                if coint_data is not None:
+                    coint_list.append(coint_data)
+        return coint_list
+
+    def add_spread_stats(self, coint_data_list: List[CointData]) -> None:
+        """
+        Add the spread statistics mean and standard deviation to the CointData object
+        :param coint_data_list:
+        :return:
+        """
+        for coint_pair in coint_data_list:
+            stock_a = coint_pair.stock_a
+            stock_b = coint_pair.stock_b
+            close_a = self.period_close_df[stock_a]
+            close_b = self.period_close_df[stock_b]
+            weight = coint_pair.weight
+            spread = close_a - weight * close_b
+            coint_pair.mean = np.mean(spread)
+            coint_pair.stddev = np.std(spread)
