@@ -284,6 +284,8 @@ import pandas as pd
 import seaborn as sns
 import statsmodels.api as sm
 from numpy import log
+from statsmodels.iolib.summary import Summary
+from statsmodels.regression.linear_model import RegressionResults
 from statsmodels.tsa.stattools import adfuller
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
 from tabulate import tabulate
@@ -298,6 +300,7 @@ from plot_ts.plot_time_series import plot_ts, plot_two_ts
 from read_market_data.MarketData import MarketData, read_s_and_p_stock_info, extract_sectors
 
 from s_and_p_filter import s_and_p_directory, s_and_p_stock_file
+from utils import find_date_index
 from utils.find_date_index import findDateIndex
 
 s_and_p_file = s_and_p_directory + os.path.sep + s_and_p_stock_file
@@ -331,10 +334,11 @@ pairs_list = get_pairs(sectors)
 
 class CointData:
 
-    def __init__(self, stock_a: str, stock_b: str, weight: float ):
+    def __init__(self, stock_a: str, stock_b: str, weight: float, intercept: float ):
         self.stock_a: str = stock_a
         self.stock_b: str = stock_b
         self.weight: float = weight
+        self.intercept: float = intercept
         self.mean: float = 0.0 # mean of the spread
         self.stddev: float = 0.0 # standard deviation of the spread
 
@@ -378,6 +382,7 @@ class PairStatistics:
             abs_value = abs(value)
             if abs_coint_stat > abs_value:
                 cointegrated = True
+                break
         return cointegrated
 
     def engle_granger_coint(self, pair: Tuple) -> CointData:
@@ -404,24 +409,25 @@ class PairStatistics:
                 result = result_ba
                 slope = slope_ba
             slope = round(slope, self.decimals)
-            residuals = result.resid
-            adf_result = adfuller(residuals)
-            adf_stat = round(adf_result[0], self.decimals)
-            critical_vals = adf_result[4]
-            cointegrated = self.check_coint(adf_stat, critical_vals)
-            if cointegrated:
-                coint_data = CointData(stock_a=stock_A, stock_b=stock_B, weight=slope)
+            intercept = round(result.params['const'], self.decimals)
+            # A hack that attempts to get rid of outlier pairs. The values for the slop and intercept cutoffs
+            # were arrived at by looking at the distributions of the data. Still, it's a bit arbitrary.
+            if slope <= 6 and abs(intercept) <= 100:
+                residuals = result.resid
+                adf_result = adfuller(residuals)
+                adf_stat = round(adf_result[0], self.decimals)
+                critical_vals = adf_result[4]
+                cointegrated = self.check_coint(adf_stat, critical_vals)
+                if cointegrated:
+                    coint_data = CointData(stock_a=stock_A, stock_b=stock_B, weight=slope, intercept=intercept)
         return coint_data
 
 
 class PeriodBacktest:
 
-    def __init__(self, close_prices_df: pd.DataFrame, start_date: datetime, window: int, corr_cutoff: float) -> None:
+    def __init__(self, period_close_df: pd.DataFrame, corr_cutoff: float) -> None:
         self.corr_cutoff = corr_cutoff
-        index = close_prices_df.index
-        start_ix = findDateIndex(date_index=index, search_date=start_date)
-        assert(start_ix >= 0)
-        self.period_close_df = close_prices_df.iloc[start_ix: start_ix + window]
+        self.period_close_df = period_close_df
         self.pairs_stats = PairStatistics(self.period_close_df)
 
     def select_pairs(self, pairs_list: List[Tuple]) -> List[CointData]:
@@ -446,13 +452,65 @@ class PeriodBacktest:
         :param coint_data_list:
         :return:
         """
+        bad_list = list()
         for coint_pair in coint_data_list:
             stock_a = coint_pair.stock_a
             stock_b = coint_pair.stock_b
             close_a = self.period_close_df[stock_a]
             close_b = self.period_close_df[stock_b]
             weight = coint_pair.weight
-            spread = close_a - weight * close_b
+            spread = close_a - coint_pair.intercept - weight * close_b
             coint_pair.mean = np.mean(spread)
             coint_pair.stddev = np.std(spread)
+            # If the standard deviation is greater than 10 it's an outlier with a problematic spread
+            # Cases where the standard deviation is this large are rare.
+            if coint_pair.stddev > 10:
+                bad_list.append(coint_pair)
+        # Remove the problematic elements
+        for elem in bad_list:
+            coint_data_list.remove(elem)
 
+    def filter_pairs_list(self, coint_data_list: List[CointData]) -> List[CointData]:
+        """
+        Filter the pairs list so that the stocks in the list are unique. That is, no stock appears
+        in more than one pair.
+
+        This is done by building a dictionary with the key for stock_a from CointData and
+        a list of the CointData elements that have stock_a. The maximum standard deviation
+        is then used to find the maximum element.
+        :param coint_data_list:
+        :return:
+        """
+        filtered_pairs: List[CointData] = list()
+        pairs_dict: Dict = dict()
+        for pair_info in coint_data_list:
+            stock_key = pair_info.stock_a
+            if stock_key not in pairs_dict:
+                pairs_dict[stock_key] = list()
+            l: List = pairs_dict[stock_key]
+            l.append(pair_info)
+        for key in pairs_dict.keys():
+            l: List = pairs_dict[key]
+            max_elem = max(l, key=lambda elem:elem.stddev)
+            if max_elem is not None:
+                filtered_pairs.append(max_elem)
+        return filtered_pairs
+
+    def get_period_pairs(self, pairs_list: List[Tuple]) -> List[CointData]:
+        coint_data_list: List[CointData] = self.select_pairs(pairs_list)
+        self.add_spread_stats(coint_data_list)
+        filtered_list = self.filter_pairs_list(coint_data_list)
+        # Sort by declining standard deviation value
+        filtered_list.sort(key=lambda elem:elem.stddev, reverse=True)
+        return filtered_list
+
+
+close_price_index = close_prices_df.index
+start_ix = find_date_index.findDateIndex(close_price_index, start_date)
+end_ix = start_ix + half_year
+period_close_df = close_prices_df.iloc[start_ix:end_ix]
+period_backtest = PeriodBacktest(period_close_df=period_close_df, corr_cutoff=0.75)
+coint_list = period_backtest.get_period_pairs(pairs_list)
+
+
+pass
