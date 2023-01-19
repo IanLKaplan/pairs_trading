@@ -423,12 +423,12 @@ class PairStatistics:
         return coint_data
 
 
-class PeriodBacktest:
+class InSamplePairs:
 
-    def __init__(self, period_close_df: pd.DataFrame, corr_cutoff: float) -> None:
+    def __init__(self, in_sample_close_df: pd.DataFrame, corr_cutoff: float) -> None:
         self.corr_cutoff = corr_cutoff
-        self.period_close_df = period_close_df
-        self.pairs_stats = PairStatistics(self.period_close_df)
+        self.in_sample_close_df = in_sample_close_df
+        self.pairs_stats = PairStatistics(self.in_sample_close_df)
 
     def select_pairs(self, pairs_list: List[Tuple]) -> List[CointData]:
         """
@@ -456,8 +456,8 @@ class PeriodBacktest:
         for coint_pair in coint_data_list:
             stock_a = coint_pair.stock_a
             stock_b = coint_pair.stock_b
-            close_a = self.period_close_df[stock_a]
-            close_b = self.period_close_df[stock_b]
+            close_a = self.in_sample_close_df[stock_a]
+            close_b = self.in_sample_close_df[stock_b]
             weight = coint_pair.weight
             spread = close_a - coint_pair.intercept - weight * close_b
             coint_pair.mean = np.mean(spread)
@@ -496,7 +496,7 @@ class PeriodBacktest:
                 filtered_pairs.append(max_elem)
         return filtered_pairs
 
-    def get_period_pairs(self, pairs_list: List[Tuple]) -> List[CointData]:
+    def get_in_sample_pairs(self, pairs_list: List[Tuple]) -> List[CointData]:
         coint_data_list: List[CointData] = self.select_pairs(pairs_list)
         self.add_spread_stats(coint_data_list)
         filtered_list = self.filter_pairs_list(coint_data_list)
@@ -505,12 +505,21 @@ class PeriodBacktest:
         return filtered_list
 
 
+class OutOfSampleBacktest:
+
+    def __init__(self, out_of_sample_close_df: pd.DataFrame):
+        self.out_of_sample_close_df = out_of_sample_close_df
+
+    def backtest_pair(self, pair_info: CointData):
+        pass
+
+
 close_price_index = close_prices_df.index
 start_ix = find_date_index.findDateIndex(close_price_index, start_date)
 end_ix = start_ix + half_year
 period_close_df = close_prices_df.iloc[start_ix:end_ix]
-period_backtest = PeriodBacktest(period_close_df=period_close_df, corr_cutoff=0.75)
-coint_list = period_backtest.get_period_pairs(pairs_list)
+period_backtest = InSamplePairs(in_sample_close_df=period_close_df, corr_cutoff=0.75)
+coint_list = period_backtest.get_in_sample_pairs(pairs_list)
 
 
 pass
