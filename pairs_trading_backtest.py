@@ -275,6 +275,7 @@
 
 import os
 from datetime import datetime
+from enum import Enum
 from multiprocessing import Pool
 from typing import List, Tuple, Dict
 
@@ -505,13 +506,78 @@ class InSamplePairs:
         return filtered_list
 
 
+class OpenPosition(Enum):
+    NOT_OPEN = 1
+    SHORT_A_LONG_B = 2
+    LONG_A_SHORT_B = 3
+
+
 class OutOfSampleBacktest:
 
-    def __init__(self, out_of_sample_close_df: pd.DataFrame):
+    class Position:
+        def __init__(self, price_a: float, price_b: float, weight: float, budget: int, position: OpenPosition):
+            self.position = position
+            self.open_a = price_a
+            self.open_b = price_b
+            self.weight_i = round(weight, 0)
+            self.shares_a = 0
+            self.shares_b = 0
+            self.cost_a = 0
+            self.cost_b = 0
+            self.init_margin = 0.0
+            self.delta_margin = 0.0
+            weighted_price_b = self.weight_i * self.open_b
+            if position == OpenPosition.SHORT_A_LONG_B:
+                # Short A
+                self.shares_a = budget // self.open_a
+                self.cost_a = self.shares_a * self.open_a
+                self.init_margin = round(self.cost_a * 0.5, 0)
+                cash = self.cost_a + (budget - self.cost_a)
+                # Long weight * B
+                weighted_shares_b = cash // weighted_price_b
+                self.cost_b = weighted_shares_b * weighted_price_b
+                self.shares_b = self.cost_b // self.open_b
+            elif position == OpenPosition.LONG_A_SHORT_B:
+                # Short weight * B
+                weighted_shares_b = budget // weighted_price_b
+                self.cost_b = weighted_shares_b * weighted_price_b
+                self.shares_b = self.cost_b // self.open_b
+                self.init_margin = round(self.cost_b * 0.5, 0)
+                cash = self.cost_b + (budget - self.cost_b)
+                # Long A
+                self.shares_a = cash // self.open_a
+                self.cost_a = self.shares_a * self.open_a
+
+
+    def __init__(self, out_of_sample_close_df: pd.DataFrame, pair_budget: int):
         self.out_of_sample_close_df = out_of_sample_close_df
+        self.pair_budget = pair_budget
 
     def backtest_pair(self, pair_info: CointData):
-        pass
+        position_type: OpenPosition = OpenPosition.NOT_OPEN
+        position = None
+        weight = pair_info.weight
+        intercept = pair_info.intercept
+        mean = pair_info.mean
+        delta = pair_info.stddev
+        stock_a = pair_info.stock_a
+        stock_b = pair_info.stock_b
+        pair_close = self.out_of_sample_close_df[[stock_a, stock_b]]
+        for ix, day_close in pair_close.iterrows():
+            price_a = day_close[stock_a]
+            price_b = day_close[stock_b]
+            day_spread = close_a - intercept - (weight * close_b)
+            if position_type == OpenPosition.NOT_OPEN:
+                if day_spread >= mean + delta:
+                    position_type = OpenPosition.SHORT_A_LONG_B
+                elif day_spread <= mean - delta:
+                    position_type = OpenPosition.LONG_A_SHORT_B
+                position = self.Position(price_a=price_a, price_b=price_b, weight=weight, budget=self.pair_budget,
+                                         position=position_type)
+            elif position is not None:
+                pass # check for position close. if open, adjust margin
+
+
 
 
 close_price_index = close_prices_df.index
