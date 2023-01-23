@@ -310,8 +310,8 @@ start_date_str = '2007-01-03'
 start_date: datetime = datetime.fromisoformat(start_date_str)
 
 trading_days = 252
-half_year = int(trading_days/2)
-quarter = int(trading_days/4)
+half_year = int(trading_days / 2)
+quarter = int(trading_days / 4)
 
 stock_info_df = read_s_and_p_stock_info(s_and_p_file)
 stock_l: list = list(set(stock_info_df['Symbol']))
@@ -335,13 +335,13 @@ pairs_list = get_pairs(sectors)
 
 class CointData:
 
-    def __init__(self, stock_a: str, stock_b: str, weight: float, intercept: float ):
+    def __init__(self, stock_a: str, stock_b: str, weight: float, intercept: float):
         self.stock_a: str = stock_a
         self.stock_b: str = stock_b
         self.weight: float = weight
         self.intercept: float = intercept
-        self.mean: float = 0.0 # mean of the spread
-        self.stddev: float = 0.0 # standard deviation of the spread
+        self.mean: float = 0.0  # mean of the spread
+        self.stddev: float = 0.0  # standard deviation of the spread
 
 
 class PairStatistics:
@@ -354,7 +354,6 @@ class PairStatistics:
         self.stock_list = self.close_prices.columns
         self.decimals = 2
 
-
     def pair_correlation(self, pair: Tuple) -> float:
         """
         :param pair: the pair is a Tuple like  ('ALB', 'APD', 'materials') So pair[0] is 'ALB' and pair[1] is 'APD'
@@ -362,7 +361,7 @@ class PairStatistics:
         """
         stock_A: str = pair[0]
         stock_B: str = pair[1]
-        correlation: float = -2.0 # bad correlation value
+        correlation: float = -2.0  # bad correlation value
         if stock_A in self.stock_list and stock_B in self.stock_list:
             data_a = self.close_prices[stock_A]
             data_b = self.close_prices[stock_B]
@@ -492,7 +491,7 @@ class InSamplePairs:
             l.append(pair_info)
         for key in pairs_dict.keys():
             l: List = pairs_dict[key]
-            max_elem = max(l, key=lambda elem:elem.stddev)
+            max_elem = max(l, key=lambda elem: elem.stddev)
             if max_elem is not None:
                 filtered_pairs.append(max_elem)
         return filtered_pairs
@@ -502,7 +501,7 @@ class InSamplePairs:
         self.add_spread_stats(coint_data_list)
         filtered_list = self.filter_pairs_list(coint_data_list)
         # Sort by declining standard deviation value
-        filtered_list.sort(key=lambda elem:elem.stddev, reverse=True)
+        filtered_list.sort(key=lambda elem: elem.stddev, reverse=True)
         return filtered_list
 
 
@@ -510,74 +509,100 @@ class OpenPosition(Enum):
     NOT_OPEN = 1
     SHORT_A_LONG_B = 2
     LONG_A_SHORT_B = 3
+    SHARE_PRICE_OUT_OF_BUDGET = 4
 
 
 class OutOfSampleBacktest:
-
+    initial_margin_percent = 0.50
+    reg_T_margin_percent = 0.25
     class Position:
-        def __init__(self, price_a: float, price_b: float, weight: float, budget: int, position: OpenPosition):
-            self.position = position
-            self.open_a = price_a
-            self.open_b = price_b
+        def __init__(self, price_a: float, price_b: float, weight: float, budget: int, position_type: OpenPosition):
+            self.position_type = position_type
+            self.price_a = price_a # share price for stock A at time of position open
+            self.price_b = price_b # share price for stock B at time of position open
             self.weight_i = round(weight, 0)
             self.shares_a = 0
             self.shares_b = 0
             self.cost_a = 0
             self.cost_b = 0
-            self.init_margin = 0.0
-            self.delta_margin = 0.0
-            weighted_price_b = self.weight_i * self.open_b
-            if position == OpenPosition.SHORT_A_LONG_B:
+            self.init_margin = 0.0 # margin required when the position is opened
+            self.delta_margin = 0.0 # maximum margin
+            weighted_price_b = self.weight_i * self.price_b
+            if position_type == OpenPosition.SHORT_A_LONG_B:
                 # Short A
-                self.shares_a = budget // self.open_a
-                self.cost_a = self.shares_a * self.open_a
-                self.init_margin = round(self.cost_a * 0.5, 0)
+                self.shares_a = budget // self.price_a
+                self.cost_a = self.shares_a * self.price_a
+                self.init_margin = round(self.cost_a + self.cost_a * OutOfSampleBacktest.initial_margin_percent, 0)
                 cash = self.cost_a + (budget - self.cost_a)
                 # Long weight * B
                 weighted_shares_b = cash // weighted_price_b
                 self.cost_b = weighted_shares_b * weighted_price_b
-                self.shares_b = self.cost_b // self.open_b
-            elif position == OpenPosition.LONG_A_SHORT_B:
+                self.shares_b = self.cost_b // self.price_b
+            elif position_type == OpenPosition.LONG_A_SHORT_B:
                 # Short weight * B
                 weighted_shares_b = budget // weighted_price_b
                 self.cost_b = weighted_shares_b * weighted_price_b
-                self.shares_b = self.cost_b // self.open_b
-                self.init_margin = round(self.cost_b * 0.5, 0)
+                self.shares_b = self.cost_b // self.price_b
+                self.init_margin = round(self.cost_b + self.cost_b * OutOfSampleBacktest.initial_margin_percent, 0)
                 cash = self.cost_b + (budget - self.cost_b)
                 # Long A
-                self.shares_a = cash // self.open_a
-                self.cost_a = self.shares_a * self.open_a
-
+                self.shares_a = cash // self.price_a
+                self.cost_a = self.shares_a * self.price_a
+            self.delta_margin = self.init_margin
 
     def __init__(self, out_of_sample_close_df: pd.DataFrame, pair_budget: int):
         self.out_of_sample_close_df = out_of_sample_close_df
         self.pair_budget = pair_budget
 
-    def backtest_pair(self, pair_info: CointData):
+    def update_margin(self, position: Position, price_a: float, price_b: float) -> None:
+        """
+        Interactive Brokers adjusts the margin as the price changes. This means that as the price
+        changes, additional margin may be required. This function calculates the maximum margin amount
+        for the position.
+        :param position: The Postion object
+        :param price_a: The current price for stock A
+        :param price_b: The current price for stock B
+        :return: None
+        """
+        # Short A, Long B
+        current_price = price_a
+        if position.position_type == OpenPosition.LONG_A_SHORT_B:
+            current_price = price_b
+        delta = current_price + current_price * self.reg_T_margin_percent
+        position.delta_margin = max(position.delta_margin, delta)
+
+
+    def close_position(self, position: Position) -> None:
+        pass
+
+    def backtest_pair(self, pair_info: CointData, delta: float):
         position_type: OpenPosition = OpenPosition.NOT_OPEN
         position = None
         weight = pair_info.weight
         intercept = pair_info.intercept
         mean = pair_info.mean
-        delta = pair_info.stddev
         stock_a = pair_info.stock_a
         stock_b = pair_info.stock_b
         pair_close = self.out_of_sample_close_df[[stock_a, stock_b]]
         for ix, day_close in pair_close.iterrows():
             price_a = day_close[stock_a]
             price_b = day_close[stock_b]
-            day_spread = close_a - intercept - (weight * close_b)
+            day_spread = price_a - intercept - (weight * price_b)
             if position_type == OpenPosition.NOT_OPEN:
                 if day_spread >= mean + delta:
                     position_type = OpenPosition.SHORT_A_LONG_B
                 elif day_spread <= mean - delta:
                     position_type = OpenPosition.LONG_A_SHORT_B
                 position = self.Position(price_a=price_a, price_b=price_b, weight=weight, budget=self.pair_budget,
-                                         position=position_type)
-            elif position is not None:
-                pass # check for position close. if open, adjust margin
-
-
+                                         position_type=position_type)
+                if position.shares_a == 0 or position.shares_b == 0:
+                    position_type = OpenPosition.SHARE_PRICE_OUT_OF_BUDGET
+            elif position_type == OpenPosition.SHORT_A_LONG_B and day_spread or OpenPosition.LONG_A_SHORT_B:
+                self.update_margin(position, price_a, price_b)
+                if OpenPosition.SHORT_A_LONG_B and day_spread <= mean:
+                    self.close_position(position)
+                elif OpenPosition.LONG_A_SHORT_B and day_spread >= mean:
+                    self.close_position(position)
 
 
 close_price_index = close_prices_df.index
@@ -587,5 +612,9 @@ period_close_df = close_prices_df.iloc[start_ix:end_ix]
 period_backtest = InSamplePairs(in_sample_close_df=period_close_df, corr_cutoff=0.75)
 coint_list = period_backtest.get_in_sample_pairs(pairs_list)
 
+spead_stddev = np.array(list(elem.stddev for elem in coint_list))
+plt.hist(spead_stddev, bins='auto')
+plt.title('Standard Deviation of the Pairs Spread')
+plt.show()
 
 pass
