@@ -276,7 +276,6 @@
 import os
 from datetime import datetime
 from enum import Enum
-from multiprocessing import Pool
 from typing import List, Tuple, Dict
 
 import matplotlib.pyplot as plt
@@ -284,25 +283,21 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import statsmodels.api as sm
-from numpy import log
-from statsmodels.iolib.summary import Summary
-from statsmodels.regression.linear_model import RegressionResults
 from statsmodels.tsa.stattools import adfuller
-from statsmodels.tsa.vector_ar.vecm import coint_johansen
 from tabulate import tabulate
 
-from coint_analysis.coint_analysis_result import CointAnalysisResult, CointInfo
-from coint_data_io.coint_matrix_io import CointMatrixIO
 from pairs.pairs import get_pairs
 #
 # Local libraries
 #
-from plot_ts.plot_time_series import plot_ts, plot_two_ts
+from plot_ts.plot_time_series import plot_two_ts
 from read_market_data.MarketData import MarketData, read_s_and_p_stock_info, extract_sectors
 
 from s_and_p_filter import s_and_p_directory, s_and_p_stock_file
 from utils import find_date_index
-from utils.find_date_index import findDateIndex
+
+# Apply the default theme
+sns.set_theme()
 
 s_and_p_file = s_and_p_directory + os.path.sep + s_and_p_stock_file
 
@@ -463,7 +458,6 @@ class InSamplePairs:
             coint_pair.mean = np.mean(spread)
             coint_pair.stddev = np.std(spread)
 
-
     def filter_pairs_list(self, coint_data_list: List[CointData]) -> List[CointData]:
         """
         Filter the pairs list so that the stocks in the list are unique. That is, no stock appears
@@ -497,6 +491,62 @@ class InSamplePairs:
         # Sort by declining standard deviation value
         filtered_list.sort(key=lambda elem: elem.stddev, reverse=True)
         return filtered_list
+
+
+def normalize_df(data_df: pd.DataFrame) -> pd.DataFrame:
+    min_s = data_df.min()
+    max_s = data_df.max()
+    norm_df = (data_df - min_s) / (max_s - min_s)
+    return norm_df
+
+def plot_stationary_ts(stationary_df: pd.DataFrame, plus_delta: float, minus_delta: float, title: str) -> None:
+    stationary_df.plot(grid=True, title=title, figsize=(10, 6))
+    stat_mean = stationary_df.mean()[0]
+    plt.axhline(y=stat_mean, color='black', linewidth=2)
+    plt.axhline(y=stat_mean + plus_delta, color='red', linewidth=1, linestyle='--')
+    plt.axhline(y=stat_mean - minus_delta, color='green', linewidth=1, linestyle='--')
+    plt.show()
+
+close_price_index = close_prices_df.index
+start_ix = find_date_index.findDateIndex(close_price_index, start_date)
+end_ix = start_ix + half_year
+in_sample_df = close_prices_df.iloc[start_ix:end_ix]
+period_backtest = InSamplePairs(in_sample_close_df=in_sample_df, corr_cutoff=0.75)
+coint_list = period_backtest.get_in_sample_pairs(pairs_list)
+
+spead_stddev = np.array(list(elem.stddev for elem in coint_list))
+plt.hist(spead_stddev, bins='auto')
+plt.title('Standard Deviation of the Pairs Spread')
+plt.show()
+
+out_of_sample_start = end_ix
+out_of_sample_end = out_of_sample_start + quarter
+out_of_sample_df = close_prices_df.iloc[out_of_sample_start:out_of_sample_end]
+
+
+def plot_pair_data(close_df: pd.DataFrame, pair: CointData, title_prefix: str) -> None:
+    stock_a_df: pd.DataFrame = pd.DataFrame(close_df[pair.stock_a])
+    stock_b_df: pd.DataFrame = pd.DataFrame(close_df[pair.stock_b])
+    stock_a_norm_df = normalize_df(stock_a_df)
+    stock_b_norm_df = normalize_df(stock_b_df)
+    plot_two_ts(data_a=stock_a_norm_df, data_b=stock_b_norm_df, title=f'{title_prefix} normalized {pair.stock_a},{pair.stock_b}',
+                x_label='date', y_label='Normalized Price')
+    spread_df = pd.DataFrame(stock_a_df.values - pair.intercept - pair.weight * stock_b_df.values)
+    spread_df.index = close_df.index
+    plot_stationary_ts(stationary_df=spread_df, plus_delta=pair.stddev, minus_delta=pair.stddev,
+                       title=f'{title_prefix} spread for {pair.stock_a} and {pair.stock_b}')
+
+
+pair = coint_list[0]
+plot_pair_data(in_sample_df, pair, 'In-sample')
+
+plot_pair_data(out_of_sample_df, pair, 'Out-of-sample')
+
+holdings = 100000
+margin = round(holdings / 3.0, 0)
+trade_capital = holdings - margin
+num_stocks = 100
+stock_budget = int(trade_capital // num_stocks)
 
 
 class OpenPosition(Enum):
@@ -657,8 +707,6 @@ class OutOfSampleBacktest:
                                           initial_margin=int(position.init_margin), delta_margin=int(position.delta_margin))
         return transaction
 
-
-
     def backtest_pair(self, pair_info: CointData, delta: float) -> List[PairTransaction]:
         position_type: OpenPosition = OpenPosition.NOT_OPEN
         position = None
@@ -697,31 +745,7 @@ class OutOfSampleBacktest:
         return pair_transaction_l
 
 
-close_price_index = close_prices_df.index
-start_ix = find_date_index.findDateIndex(close_price_index, start_date)
-end_ix = start_ix + half_year
-in_sample_df = close_prices_df.iloc[start_ix:end_ix]
-period_backtest = InSamplePairs(in_sample_close_df=in_sample_df, corr_cutoff=0.75)
-coint_list = period_backtest.get_in_sample_pairs(pairs_list)
-
-spead_stddev = np.array(list(elem.stddev for elem in coint_list))
-plt.hist(spead_stddev, bins='auto')
-plt.title('Standard Deviation of the Pairs Spread')
-plt.show()
-
-out_of_sample_start = end_ix
-out_of_sample_end = out_of_sample_start + quarter
-out_of_sample_df = close_prices_df.iloc[out_of_sample_start:out_of_sample_end]
-
-holdings = 100000
-margin = round(holdings / 3.0, 0)
-trade_capital = holdings - margin
-num_stocks = 100
-stock_budget = int(trade_capital // num_stocks)
-
 out_of_sample_test = OutOfSampleBacktest(out_of_sample_close_df=out_of_sample_df, pair_budget=stock_budget)
-pair_list = coint_list[0:num_stocks]
-pair = pair_list[0]
 pair_transactions = out_of_sample_test.backtest_pair(pair_info=pair, delta=pair.stddev)
 
 
