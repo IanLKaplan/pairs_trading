@@ -290,7 +290,7 @@ from pairs.pairs import get_pairs
 #
 # Local libraries
 #
-from plot_ts.plot_time_series import plot_two_ts
+from plot_ts.plot_time_series import plot_two_ts, plot_four_ts
 from read_market_data.MarketData import MarketData, read_s_and_p_stock_info, extract_sectors
 
 from s_and_p_filter import s_and_p_directory, s_and_p_stock_file
@@ -508,9 +508,9 @@ def plot_stationary_ts(stationary_df: pd.DataFrame, plus_delta: float, minus_del
     plt.show()
 
 close_price_index = close_prices_df.index
-start_ix = find_date_index.findDateIndex(close_price_index, start_date)
-end_ix = start_ix + half_year
-in_sample_df = close_prices_df.iloc[start_ix:end_ix]
+in_sample_start = find_date_index.findDateIndex(close_price_index, start_date)
+in_sample_end = in_sample_start + half_year
+in_sample_df = close_prices_df.iloc[in_sample_start:in_sample_end]
 period_backtest = InSamplePairs(in_sample_close_df=in_sample_df, corr_cutoff=0.75)
 coint_list = period_backtest.get_in_sample_pairs(pairs_list)
 
@@ -519,7 +519,7 @@ plt.hist(spead_stddev, bins='auto')
 plt.title('Standard Deviation of the Pairs Spread')
 plt.show()
 
-out_of_sample_start = end_ix
+out_of_sample_start = in_sample_end
 out_of_sample_end = out_of_sample_start + quarter
 out_of_sample_df = close_prices_df.iloc[out_of_sample_start:out_of_sample_end]
 
@@ -541,6 +541,33 @@ pair = coint_list[0]
 plot_pair_data(in_sample_df, pair, 'In-sample')
 
 plot_pair_data(out_of_sample_df, pair, 'Out-of-sample')
+
+window = trading_days // 12
+window_out_of_sample_start = in_sample_end - window
+window_out_of_sample_end = in_sample_end + quarter
+window_out_of_sample_df = close_prices_df.iloc[window_out_of_sample_start:window_out_of_sample_end]
+stock_a_df: pd.DataFrame = pd.DataFrame(window_out_of_sample_df[pair.stock_a])
+stock_b_df: pd.DataFrame = pd.DataFrame(window_out_of_sample_df[pair.stock_b])
+spread_df = pd.DataFrame(stock_a_df.values - pair.intercept - pair.weight * stock_b_df.values)
+spread_df.index = window_out_of_sample_df.index
+spread_mean_df = spread_df.rolling(window).mean().iloc[window:]
+spread_mean_df.columns = ['Spread Mean']
+spread_mean_df.index = out_of_sample_df.index
+spread_stddev_df = spread_df.rolling(window).std().iloc[window:]
+out_of_sample_spread = spread_df.iloc[window:]
+mean_plus_stddev = pd.DataFrame(spread_mean_df.values + spread_stddev_df.values)
+mean_plus_stddev.index = out_of_sample_df.index
+mean_plus_stddev.columns = ['Mean plus Stddev']
+mean_minus_stddev = pd.DataFrame(spread_mean_df.values - spread_stddev_df.values)
+mean_minus_stddev.index = out_of_sample_df.index
+mean_minus_stddev.columns = ['Mean minus Stddev']
+out_of_sample_spread.columns = ['Spread']
+out_of_sample_spread.index = out_of_sample_df.index
+plot_four_ts(data_a=out_of_sample_spread, data_b=spread_mean_df,
+             data_c=mean_plus_stddev,
+             data_d=mean_minus_stddev,
+             title='spread and spread mean', x_label='date', y_label='spread')
+pass
 
 holdings = 100000
 margin = round(holdings / 3.0, 0)
