@@ -543,7 +543,7 @@ plot_pair_data(in_sample_df, pair, 'In-sample')
 plot_pair_data(out_of_sample_df, pair, 'Out-of-sample')
 
 def plot_mean_spread(pair: CointData, close_prices_df: pd.DataFrame, start_ix: int, data_window: int,
-                     mean_window: int, title: str) -> None:
+                     mean_window: int, stddev_delta: float, title: str) -> None:
     """
     Starting at start_ix calculate the spread from start_ix to start_ix + data_window.
     Calculate the rolling mean from start_ix
@@ -560,34 +560,34 @@ def plot_mean_spread(pair: CointData, close_prices_df: pd.DataFrame, start_ix: i
     stock_a_df = close_prices_df[pair.stock_a].iloc[start_ix:end_ix]
     stock_b_df = close_prices_df[pair.stock_b].iloc[start_ix:end_ix]
     spread_df = pd.DataFrame(stock_a_df.values - pair.intercept - pair.weight * stock_b_df.values)
+    spread_df.columns = ['Spread']
     spread_mean_df = spread_df.rolling(mean_window).mean().iloc[mean_window:]
+    spread_mean_df.columns = ['Mean']
     spread_mean_df.index = index_from_window
-    spread_stddev_df = spread_df.rolling(mean_window).std().iloc[mean_window:]
+    spread_stddev_df = stddev_delta * spread_df.rolling(mean_window).std().iloc[mean_window:]
     mean_plus_stddev = pd.DataFrame(spread_mean_df.values + spread_stddev_df.values)
     mean_plus_stddev.index = index_from_window
-    mean_plus_stddev.columns = ['Mean + stddev']
+    mean_plus_stddev.columns = [f'Mean + {stddev_delta} x stddev']
     mean_minus_stddev = pd.DataFrame(spread_mean_df.values - spread_stddev_df.values)
     mean_minus_stddev.index = index_from_window
-    mean_minus_stddev.columns = ['Mean - stddev']
+    mean_minus_stddev.columns = ['Mean - {stddev_delta} x stddev']
     spread_df: pd.DataFrame = spread_df.iloc[window:]
     spread_df.index = index_from_window
     spread_df.columns = ['Spread']
-    plot_four_ts(data_a=spread_df, data_b=spread_mean_df,
-                 data_c=mean_plus_stddev,
-                 data_d=mean_minus_stddev,
-                 title=title, x_label='date', y_label='spread')
+    data_df = pd.concat([spread_df, spread_mean_df, mean_plus_stddev, mean_minus_stddev], axis=1)
+    data_df.plot(grid=True, title=title, figsize=(10,6))
 
 
 
 window = trading_days // 12
 window_in_of_sample_start = in_sample_start
 plot_mean_spread(pair=pair, close_prices_df=close_prices_df, start_ix=window_in_of_sample_start,
-                 data_window=half_year-window, mean_window=window, title='in-sample with mean and stddev')
+                 data_window=half_year-window, mean_window=window, stddev_delta=2.0, title='in-sample with mean and stddev')
 
 
 window_out_of_sample_start = in_sample_end - window
 plot_mean_spread(pair=pair, close_prices_df=close_prices_df, start_ix=window_out_of_sample_start,
-                 data_window=quarter, mean_window=window, title='out-of-sample with mean and stddev')
+                 data_window=quarter, mean_window=window, stddev_delta=2.0, title='out-of-sample with mean and stddev')
 
 pass
 
