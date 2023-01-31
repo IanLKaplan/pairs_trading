@@ -283,6 +283,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import statsmodels.api as sm
+from dateutil.utils import today
 from statsmodels.tsa.stattools import adfuller
 from tabulate import tabulate
 
@@ -335,9 +336,7 @@ class CointData:
         self.stock_b: str = stock_b
         self.weight: float = weight
         self.intercept: float = intercept
-        self.mean: float = 0.0  # mean of the spread
-        self.stddev: float = 0.0  # standard deviation of the spread
-
+        self.stddev: float = 0.0
 
 class PairStatistics:
 
@@ -443,11 +442,10 @@ class InSamplePairs:
 
     def add_spread_stats(self, coint_data_list: List[CointData]) -> None:
         """
-        Add the spread statistics mean and standard deviation to the CointData object
+        Add the spread standard deviation to the CointData object
         :param coint_data_list:
         :return:
         """
-        bad_list = list()
         for coint_pair in coint_data_list:
             stock_a = coint_pair.stock_a
             stock_b = coint_pair.stock_b
@@ -455,7 +453,6 @@ class InSamplePairs:
             close_b = self.in_sample_close_df[stock_b]
             weight = coint_pair.weight
             spread = close_a - coint_pair.intercept - weight * close_b
-            coint_pair.mean = np.mean(spread)
             coint_pair.stddev = np.std(spread)
 
     def filter_pairs_list(self, coint_data_list: List[CointData]) -> List[CointData]:
@@ -570,7 +567,7 @@ def plot_mean_spread(pair: CointData, close_prices_df: pd.DataFrame, start_ix: i
     mean_plus_stddev.columns = [f'Mean + {stddev_delta} x stddev']
     mean_minus_stddev = pd.DataFrame(spread_mean_df.values - spread_stddev_df.values)
     mean_minus_stddev.index = index_from_window
-    mean_minus_stddev.columns = ['Mean - {stddev_delta} x stddev']
+    mean_minus_stddev.columns = [f'Mean - {stddev_delta} x stddev']
     spread_df: pd.DataFrame = spread_df.iloc[window:]
     spread_df.index = index_from_window
     spread_df.columns = ['Spread']
@@ -589,13 +586,7 @@ window_out_of_sample_start = in_sample_end - window
 plot_mean_spread(pair=pair, close_prices_df=close_prices_df, start_ix=window_out_of_sample_start,
                  data_window=quarter, mean_window=window, stddev_delta=2.0, title='out-of-sample with mean and stddev')
 
-pass
-
-holdings = 100000
-margin = round(holdings / 3.0, 0)
-trade_capital = holdings - margin
-num_stocks = 100
-stock_budget = int(trade_capital // num_stocks)
+plt.show()
 
 
 class OpenPosition(Enum):
@@ -609,19 +600,21 @@ class PairTransaction:
     """
     A container for the information on a pair transaction.
     """
-    def __init__(self, open_date: datetime, close_date: datetime, pair_return: float, initial_margin: int, delta_margin: int):
+    def __init__(self, open_date: datetime, close_date: datetime, pair_return: float, margin: int) -> None:
         """
         :param open_date: the date the transaction was opened
         :param close_date: the date the transaction was closed
         :param pair_return: the return of the long-short position
         :param initial_margin: the margin cash required when the position was opened
-        :param delta_margin: the maximum cash margin over the trading period
         """
         self.open_date = open_date
         self.close_date = close_date
         self.pair_return = pair_return
-        self.initial_margin = initial_margin
-        self.delta_margin = delta_margin
+        self.margin = margin
+
+    def __str__(self):
+        s = f'open date: {self.open_date}, close date: {self.close_date}, return: {self.pair_return}, margin: {self.margin}'
+        return s
 
 
 class OutOfSampleBacktest:
@@ -629,8 +622,7 @@ class OutOfSampleBacktest:
     reg_T_margin_percent = 0.25
 
     class Position:
-        def __init__(self, open_date: datetime, price_a: float, price_b: float, weight: float, budget: int,
-                     position_type: OpenPosition):
+        def __init__(self, open_date: datetime, price_a: float, price_b: float, budget: int, position_type: OpenPosition):
             """
             spread = stock_A - Weight * Stock_B
             :param price_a: the current price of stock A
@@ -643,43 +635,39 @@ class OutOfSampleBacktest:
             self.open_date = open_date
             self.price_a = price_a  # share price for stock A at time of position open
             self.price_b = price_b  # share price for stock B at time of position open
-            self.weight_i = round(weight, 0)
             self.shares_a = 0
             self.shares_b = 0
             self.cost_a = 0
             self.cost_b = 0
-            self.init_margin: int = 0  # The amount of cash needed beyond the pair long position on position open
-            self.delta_margin: int = 0  # The maximum amount of cash needed at any time beyond the pair long position
-            weighted_price_b = self.weight_i * self.price_b
+            self.margin: int = 0  # The margin amount above the value of the long position
             if position_type == OpenPosition.SHORT_A_LONG_B:
                 # Short A
                 self.shares_a = budget // self.price_a
                 self.cost_a = round(self.shares_a * self.price_a, 0)
-
+                # Cash is the amount from the short of A plus any cash left over
                 cash = self.cost_a + (budget - self.cost_a)
-                # Long weight * B
-                weighted_shares_b = cash // weighted_price_b
-                self.cost_b = round(weighted_shares_b * weighted_price_b, 0)
-                self.shares_b = self.cost_b // self.price_b
-                # The required margin is the short position + (short position x initial margin percent)
-                # The long position can be used for part of the margin requirement
+                # An approximately equal amount of cash is used to for the long postion.
+                self.shares_b = cash // self.price_b
+                self.cost_b = round(self.shares_b * self.price_b, 0)
+                # The required margin is 150% of the short position. The long position can be used for the margin
                 required_margin = round(self.cost_a + self.cost_a * OutOfSampleBacktest.initial_margin_percent, 0)
-                self.init_margin = max(required_margin - self.cost_b, 0)
+                self.margin = max(required_margin - self.cost_b, 0)
             elif position_type == OpenPosition.LONG_A_SHORT_B:
                 # Short weight * B
-                weighted_shares_b = budget // weighted_price_b
-                self.cost_b = round(weighted_shares_b * weighted_price_b, 0)
-                self.shares_b = self.cost_b // self.price_b
+                self.shares_b = budget // self.price_b
+                self.cost_b = round(self.shares_b * self.price_b, 0)
                 cash = self.cost_b + (budget - self.cost_b)
                 # Long A
                 self.shares_a = cash // self.price_a
                 self.cost_a = round(self.shares_a * self.price_a, 0)
                 required_margin = round(self.cost_b + self.cost_b * OutOfSampleBacktest.initial_margin_percent, 0)
-                self.init_margin = max(required_margin - self.cost_a, 0)
-            self.delta_margin = self.init_margin
+                self.margin = max(required_margin - self.cost_a, 0)
 
-    def __init__(self, out_of_sample_close_df: pd.DataFrame, pair_budget: int):
+    def __init__(self, out_of_sample_close_df: pd.DataFrame, start_ix: int, window: int, pair_budget: int):
         self.out_of_sample_close_df = out_of_sample_close_df
+        self.out_of_sample_index = self.out_of_sample_close_df.index
+        self.start_ix = start_ix
+        self.window = window
         self.pair_budget = pair_budget
 
     def update_margin(self, position: Position, price_a: float, price_b: float) -> None:
@@ -693,21 +681,21 @@ class OutOfSampleBacktest:
         :return: None
         """
         # Short A, Long B
-        long_shares = position.shares_b
         short_shares = position.shares_a
+        long_shares = position.shares_b
         short_price = price_a
         long_price = price_b
         if position.position_type == OpenPosition.LONG_A_SHORT_B:
             # Short B, Long A
+            short_shares = position.shares_b
+            long_shares = position.shares_a
             short_price = price_b
             long_price = price_a
-            long_shares = position.shares_a
-            short_shares = position.shares_b
         short_position = short_shares * short_price
         long_position = long_shares * long_price
         required_margin = short_position + short_position * self.reg_T_margin_percent
         required_cash = max(required_margin - long_position, 0)
-        position.delta_margin = max(position.delta_margin, required_cash)
+        position.margin = max(position.margin, required_cash)
 
     def close_position(self, position: Position, close_date: datetime, price_a: float, price_b: float) -> PairTransaction:
         """
@@ -753,49 +741,78 @@ class OutOfSampleBacktest:
             #   total = ((1 + 0.02) * (1 + 0.03)) - 1 = 0.0506
             total_return = round(((1 + ret_short) * (1 + ret_long)) - 1, 4)
             transaction = PairTransaction(open_date=position.open_date, close_date=close_date, pair_return=total_return,
-                                          initial_margin=int(position.init_margin), delta_margin=int(position.delta_margin))
+                                          margin=int(position.margin))
         return transaction
 
     def backtest_pair(self, pair_info: CointData, delta: float) -> List[PairTransaction]:
         position_type: OpenPosition = OpenPosition.NOT_OPEN
         position = None
+        current_date = today()
+        price_a = 0.0
+        price_b = 0.0
         weight = pair_info.weight
         intercept = pair_info.intercept
-        mean = pair_info.mean
         stock_a = pair_info.stock_a
         stock_b = pair_info.stock_b
         pair_close = self.out_of_sample_close_df[[stock_a, stock_b]]
         pair_transaction_l = list()
-        for ix, day_close in pair_close.iterrows():
+        num_rows = pair_close.shape[0]
+        for row_ix in range(self.start_ix,num_rows):
             transaction = None
+            pair_close_back = pair_close.iloc[row_ix-window:row_ix]
+            price_a_back = pair_close_back[stock_a]
+            price_b_back = pair_close_back[stock_b]
+            back_spread = price_a_back.values - intercept - (weight * price_b_back.values)
+            mean = np.mean(back_spread).round(2)
+            stddev = np.std(back_spread).round(2)
+            day_close = pair_close.iloc[row_ix]
+            current_date = pd.to_datetime(self.out_of_sample_index[row_ix])
             price_a = day_close[stock_a]
             price_b = day_close[stock_b]
-            current_date = pd.to_datetime(ix)
             day_spread = price_a - intercept - (weight * price_b)
             if position_type == OpenPosition.NOT_OPEN:
-                if day_spread >= mean + delta:
+                if day_spread >= mean + (delta * stddev):
                     position_type = OpenPosition.SHORT_A_LONG_B
-                elif day_spread <= mean - delta:
+                elif day_spread <= mean - (delta * stddev):
                     position_type = OpenPosition.LONG_A_SHORT_B
-                position = self.Position(open_date=current_date, price_a=price_a, price_b=price_b, weight=weight, budget=self.pair_budget,
-                                         position_type=position_type)
-                if position.shares_a == 0 or position.shares_b == 0:
-                    position_type = OpenPosition.SHARE_PRICE_OUT_OF_BUDGET
-                    position.position_type = OpenPosition.SHARE_PRICE_OUT_OF_BUDGET
-            elif position_type == OpenPosition.SHORT_A_LONG_B and day_spread or OpenPosition.LONG_A_SHORT_B:
+                if position_type == OpenPosition.SHORT_A_LONG_B or position_type == OpenPosition.LONG_A_SHORT_B:
+                    position = self.Position(open_date=current_date, price_a=price_a, price_b=price_b, budget=self.pair_budget,
+                                             position_type=position_type)
+                    if position.shares_a == 0 or position.shares_b == 0:
+                        position_type = OpenPosition.SHARE_PRICE_OUT_OF_BUDGET
+                        position.position_type = OpenPosition.SHARE_PRICE_OUT_OF_BUDGET
+                        position = None
+            elif position_type == OpenPosition.SHORT_A_LONG_B or position_type == OpenPosition.LONG_A_SHORT_B:
                 self.update_margin(position, price_a, price_b)
-                if OpenPosition.SHORT_A_LONG_B and day_spread <= mean:
+                if position_type == OpenPosition.SHORT_A_LONG_B and day_spread <= mean:
                     transaction = self.close_position(position, current_date, price_a, price_b)
-                elif OpenPosition.LONG_A_SHORT_B and day_spread >= mean:
+                elif position_type == OpenPosition.LONG_A_SHORT_B and day_spread >= mean:
                     transaction = self.close_position(position, current_date, price_a, price_b)
-            if transaction is not None:
-                pair_transaction_l.append(transaction)
-                position_type = OpenPosition.NOT_OPEN
+                if transaction is not None:
+                    pair_transaction_l.append(transaction)
+                    position_type = OpenPosition.NOT_OPEN
+                    transaction = None
+                    position = None
+        # if there is an open position, then close the position at the end of the time period.
+        if position is not None:
+            transaction = self.close_position(position, current_date, price_a, price_b)
+            pair_transaction_l.append(transaction)
         return pair_transaction_l
 
+# Holdings of 100,000. A short requires 150 percent in margin. This is the proceeds of the short plus 50 percent.
+# So if we short 200,000 of stock we get 200,000 from the short proceeds which is used to open a long
+# position of 200,000.  In addition, we need 100,000 for the 50 percent margin.
+#
+# To be conservative we short 160,000 of stock and open a long position of 160,000. This requires a margin of
+# 80,000 but we allocate 100,000
+holdings = 100000
+trade_capital = (2 * holdings) * 0.8
+# required margin would be trade_capital * 0.5 or 80,000
+num_stocks = 100
+stock_budget = int(trade_capital // num_stocks)
 
-out_of_sample_test = OutOfSampleBacktest(out_of_sample_close_df=out_of_sample_df, pair_budget=stock_budget)
-pair_transactions = out_of_sample_test.backtest_pair(pair_info=pair, delta=pair.stddev)
+out_of_sample_test = OutOfSampleBacktest(out_of_sample_close_df=out_of_sample_df, start_ix=window, window=window, pair_budget=stock_budget)
+pair_transactions = out_of_sample_test.backtest_pair(pair_info=pair, delta=2.0)
 
 
 pass
