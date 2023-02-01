@@ -504,22 +504,6 @@ def plot_stationary_ts(stationary_df: pd.DataFrame, plus_delta: float, minus_del
     plt.axhline(y=stat_mean - minus_delta, color='green', linewidth=1, linestyle='--')
     plt.show()
 
-close_price_index = close_prices_df.index
-in_sample_start = find_date_index.findDateIndex(close_price_index, start_date)
-in_sample_end = in_sample_start + half_year
-in_sample_df = close_prices_df.iloc[in_sample_start:in_sample_end]
-period_backtest = InSamplePairs(in_sample_close_df=in_sample_df, corr_cutoff=0.75)
-coint_list = period_backtest.get_in_sample_pairs(pairs_list)
-
-spead_stddev = np.array(list(elem.stddev for elem in coint_list))
-plt.hist(spead_stddev, bins='auto')
-plt.title('Standard Deviation of the Pairs Spread')
-plt.show()
-
-out_of_sample_start = in_sample_end
-out_of_sample_end = out_of_sample_start + quarter
-out_of_sample_df = close_prices_df.iloc[out_of_sample_start:out_of_sample_end]
-
 
 def plot_pair_data(close_df: pd.DataFrame, pair: CointData, title_prefix: str) -> None:
     stock_a_df: pd.DataFrame = pd.DataFrame(close_df[pair.stock_a])
@@ -533,6 +517,21 @@ def plot_pair_data(close_df: pd.DataFrame, pair: CointData, title_prefix: str) -
     plot_stationary_ts(stationary_df=spread_df, plus_delta=pair.stddev, minus_delta=pair.stddev,
                        title=f'{title_prefix} spread for {pair.stock_a} and {pair.stock_b}')
 
+
+in_sample_start = find_date_index.findDateIndex(close_prices_df.index, start_date)
+in_sample_end = in_sample_start + half_year
+in_sample_df = close_prices_df.iloc[in_sample_start:in_sample_end]
+period_backtest = InSamplePairs(in_sample_close_df=in_sample_df, corr_cutoff=0.75)
+coint_list = period_backtest.get_in_sample_pairs(pairs_list)
+
+spead_stddev = np.array(list(elem.stddev for elem in coint_list))
+plt.hist(spead_stddev, bins='auto')
+plt.title('Standard Deviation of the Pairs Spread')
+plt.show()
+
+out_of_sample_start = in_sample_start + quarter
+out_of_sample_end = out_of_sample_start + quarter
+out_of_sample_df = close_prices_df.iloc[out_of_sample_start:out_of_sample_end]
 
 pair = coint_list[0]
 plot_pair_data(in_sample_df, pair, 'In-sample')
@@ -600,7 +599,12 @@ class PairTransaction:
     """
     A container for the information on a pair transaction.
     """
-    def __init__(self, open_date: datetime, close_date: datetime, pair_return: float, margin: int) -> None:
+    def __init__(self, open_date: datetime,
+                 close_date: datetime,
+                 available_cash: float,
+                 total_profit: float,
+                 pair_return: float,
+                 margin: int) -> None:
         """
         :param open_date: the date the transaction was opened
         :param close_date: the date the transaction was closed
@@ -609,11 +613,16 @@ class PairTransaction:
         """
         self.open_date = open_date
         self.close_date = close_date
+        self.available_cash = available_cash
+        self.total_profit = total_profit
         self.pair_return = pair_return
         self.margin = margin
 
     def __str__(self):
-        s = f'open date: {self.open_date}, close date: {self.close_date}, return: {self.pair_return}, margin: {self.margin}'
+        format = '%Y-%m-%d'
+        s1 = f'open date: {self.open_date.strftime(format)}, close date: {self.close_date.strftime(format)}, '
+        s2 = f'cash: {self.available_cash}, profit: {self.total_profit}, return: {self.pair_return}, margin: {self.margin}'
+        s = s1 + s2
         return s
 
 
@@ -693,11 +702,11 @@ class OutOfSampleBacktest:
             long_price = price_a
         short_position = short_shares * short_price
         long_position = long_shares * long_price
-        required_margin = short_position + short_position * self.reg_T_margin_percent
+        required_margin = round(short_position + short_position * self.reg_T_margin_percent, 2)
         required_cash = max(required_margin - long_position, 0)
         position.margin = max(position.margin, required_cash)
 
-    def close_position(self, position: Position, close_date: datetime, price_a: float, price_b: float) -> PairTransaction:
+    def close_position(self, position: Position, close_date: datetime, price_a: float, price_b: float, open_cash: float) -> PairTransaction:
         """
         A short position has a positive return when the position close price is less than the open price.
         A long position has a positive return when the position close is greater than the open price.
@@ -725,6 +734,16 @@ class OutOfSampleBacktest:
                 short_position = position.cost_b
                 close_long = long_shares * price_a
                 close_short = short_shares * price_b
+            # Example: open short at 20/share and 80 shares for a total of 1600
+            #          close short at 15 and 80 shares for a total of 1200
+            #          short profit = 1600 - 1200 = 400
+            short_profit = short_position - close_short
+            # Example: open long at 20/share and 80 shares for 1600.
+            #          close long at 22/share and 80 shares for 1760
+            #          long profit = 1760 - 1600 = 160
+            long_profit = close_long - long_position
+            total_profit = round(short_profit + long_profit, 2)
+            available_cash = round(open_cash + total_profit, 2)
             # Short return:
             #   short opens at 20
             #   short closes at 15
@@ -740,12 +759,17 @@ class OutOfSampleBacktest:
             #   ret_long = 0.03
             #   total = ((1 + 0.02) * (1 + 0.03)) - 1 = 0.0506
             total_return = round(((1 + ret_short) * (1 + ret_long)) - 1, 4)
-            transaction = PairTransaction(open_date=position.open_date, close_date=close_date, pair_return=total_return,
+            transaction = PairTransaction(open_date=position.open_date,
+                                          close_date=close_date,
+                                          available_cash=available_cash,
+                                          total_profit=total_profit,
+                                          pair_return=total_return,
                                           margin=int(position.margin))
         return transaction
 
     def backtest_pair(self, pair_info: CointData, delta: float) -> List[PairTransaction]:
         position_type: OpenPosition = OpenPosition.NOT_OPEN
+        available_cash = self.pair_budget
         position = None
         current_date = today()
         price_a = 0.0
@@ -776,7 +800,7 @@ class OutOfSampleBacktest:
                 elif day_spread <= mean - (delta * stddev):
                     position_type = OpenPosition.LONG_A_SHORT_B
                 if position_type == OpenPosition.SHORT_A_LONG_B or position_type == OpenPosition.LONG_A_SHORT_B:
-                    position = self.Position(open_date=current_date, price_a=price_a, price_b=price_b, budget=self.pair_budget,
+                    position = self.Position(open_date=current_date, price_a=price_a, price_b=price_b, budget=available_cash,
                                              position_type=position_type)
                     if position.shares_a == 0 or position.shares_b == 0:
                         position_type = OpenPosition.SHARE_PRICE_OUT_OF_BUDGET
@@ -785,19 +809,21 @@ class OutOfSampleBacktest:
             elif position_type == OpenPosition.SHORT_A_LONG_B or position_type == OpenPosition.LONG_A_SHORT_B:
                 self.update_margin(position, price_a, price_b)
                 if position_type == OpenPosition.SHORT_A_LONG_B and day_spread <= mean:
-                    transaction = self.close_position(position, current_date, price_a, price_b)
+                    transaction = self.close_position(position, current_date, price_a, price_b, available_cash)
                 elif position_type == OpenPosition.LONG_A_SHORT_B and day_spread >= mean:
-                    transaction = self.close_position(position, current_date, price_a, price_b)
+                    transaction = self.close_position(position, current_date, price_a, price_b, available_cash)
                 if transaction is not None:
+                    available_cash = transaction.available_cash
                     pair_transaction_l.append(transaction)
                     position_type = OpenPosition.NOT_OPEN
                     transaction = None
                     position = None
         # if there is an open position, then close the position at the end of the time period.
         if position is not None:
-            transaction = self.close_position(position, current_date, price_a, price_b)
+            transaction = self.close_position(position, current_date, price_a, price_b, available_cash)
             pair_transaction_l.append(transaction)
         return pair_transaction_l
+
 
 # Holdings of 100,000. A short requires 150 percent in margin. This is the proceeds of the short plus 50 percent.
 # So if we short 200,000 of stock we get 200,000 from the short proceeds which is used to open a long
@@ -811,8 +837,34 @@ trade_capital = (2 * holdings) * 0.8
 num_stocks = 100
 stock_budget = int(trade_capital // num_stocks)
 
-out_of_sample_test = OutOfSampleBacktest(out_of_sample_close_df=out_of_sample_df, start_ix=window, window=window, pair_budget=stock_budget)
-pair_transactions = out_of_sample_test.backtest_pair(pair_info=pair, delta=2.0)
 
+out_of_sample_win_start = out_of_sample_start - window
+out_of_sample_end = out_of_sample_start + quarter
+out_of_sample_df = close_prices_df.iloc[out_of_sample_win_start:out_of_sample_end]
+
+out_of_sample_test = OutOfSampleBacktest(out_of_sample_close_df=out_of_sample_df, start_ix=window, window=window, pair_budget=stock_budget)
+
+# https://www.wallstreetmojo.com/portfolio-return-formula/
+
+all_transactions: list[List[PairTransaction]] = list()
+for cur_pair in coint_list:
+    pair_transactions: List[PairTransaction] = out_of_sample_test.backtest_pair(pair_info=cur_pair, delta=1.0)
+    all_transactions.append(pair_transactions)
+
+trades_per_pair = list(len(pair_trans) for pair_trans in all_transactions)
+plt.hist(trades_per_pair, bins='auto')
+plt.title('Trades per Pair')
+plt.show()
+
+quarter_return = 0.0
+w = 1.0/100.0
+for trans_list in all_transactions:
+    pair_return = 1.0
+    for pair_trans in trans_list:
+        pair_return = pair_return * (1 + pair_trans.pair_return)
+    pair_return = pair_return - 1
+    quarter_return = quarter_return + (w * pair_return)
+
+print(f'quarter return: {round(100 * quarter_return, 2)}')
 
 pass
