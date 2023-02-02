@@ -529,7 +529,7 @@ plt.hist(spead_stddev, bins='auto')
 plt.title('Standard Deviation of the Pairs Spread')
 plt.show()
 
-out_of_sample_start = in_sample_start + quarter
+out_of_sample_start = in_sample_end
 out_of_sample_end = out_of_sample_start + quarter
 out_of_sample_df = close_prices_df.iloc[out_of_sample_start:out_of_sample_end]
 
@@ -574,16 +574,17 @@ def plot_mean_spread(pair: CointData, close_prices_df: pd.DataFrame, start_ix: i
     data_df.plot(grid=True, title=title, figsize=(10,6))
 
 
+stddev_delta = 1.0
 
 window = trading_days // 12
 window_in_of_sample_start = in_sample_start
 plot_mean_spread(pair=pair, close_prices_df=close_prices_df, start_ix=window_in_of_sample_start,
-                 data_window=half_year-window, mean_window=window, stddev_delta=2.0, title='in-sample with mean and stddev')
+                 data_window=half_year-window, mean_window=window, stddev_delta=stddev_delta, title='in-sample with mean and stddev')
 
 
 window_out_of_sample_start = in_sample_end - window
 plot_mean_spread(pair=pair, close_prices_df=close_prices_df, start_ix=window_out_of_sample_start,
-                 data_window=quarter, mean_window=window, stddev_delta=2.0, title='out-of-sample with mean and stddev')
+                 data_window=quarter, mean_window=window, stddev_delta=stddev_delta, title='out-of-sample with mean and stddev')
 
 plt.show()
 
@@ -672,12 +673,8 @@ class OutOfSampleBacktest:
                 required_margin = round(self.cost_b + self.cost_b * OutOfSampleBacktest.initial_margin_percent, 0)
                 self.margin = max(required_margin - self.cost_a, 0)
 
-    def __init__(self, out_of_sample_close_df: pd.DataFrame, start_ix: int, window: int, pair_budget: int):
-        self.out_of_sample_close_df = out_of_sample_close_df
-        self.out_of_sample_index = self.out_of_sample_close_df.index
-        self.start_ix = start_ix
-        self.window = window
-        self.pair_budget = pair_budget
+    def __init__(self) -> None:
+        pass
 
     def update_margin(self, position: Position, price_a: float, price_b: float) -> None:
         """
@@ -767,9 +764,16 @@ class OutOfSampleBacktest:
                                           margin=int(position.margin))
         return transaction
 
-    def backtest_pair(self, pair_info: CointData, delta: float) -> List[PairTransaction]:
+    def backtest_pair(self,
+                      pair_info: CointData,
+                      out_of_sample_close_df: pd.DataFrame,
+                      start_ix: int,
+                      window: int,
+                      delta: float,
+                      pair_budget: int) -> List[PairTransaction]:
         position_type: OpenPosition = OpenPosition.NOT_OPEN
-        available_cash = self.pair_budget
+        out_of_sample_index = out_of_sample_close_df.index
+        available_cash = pair_budget
         position = None
         current_date = today()
         price_a = 0.0
@@ -778,10 +782,10 @@ class OutOfSampleBacktest:
         intercept = pair_info.intercept
         stock_a = pair_info.stock_a
         stock_b = pair_info.stock_b
-        pair_close = self.out_of_sample_close_df[[stock_a, stock_b]]
+        pair_close = out_of_sample_close_df[[stock_a, stock_b]]
         pair_transaction_l = list()
         num_rows = pair_close.shape[0]
-        for row_ix in range(self.start_ix,num_rows):
+        for row_ix in range(start_ix,num_rows):
             transaction = None
             pair_close_back = pair_close.iloc[row_ix-window:row_ix]
             price_a_back = pair_close_back[stock_a]
@@ -790,7 +794,7 @@ class OutOfSampleBacktest:
             mean = np.mean(back_spread).round(2)
             stddev = np.std(back_spread).round(2)
             day_close = pair_close.iloc[row_ix]
-            current_date = pd.to_datetime(self.out_of_sample_index[row_ix])
+            current_date = pd.to_datetime(out_of_sample_index[row_ix])
             price_a = day_close[stock_a]
             price_b = day_close[stock_b]
             day_spread = price_a - intercept - (weight * price_b)
@@ -837,34 +841,48 @@ trade_capital = (2 * holdings) * 0.8
 num_stocks = 100
 stock_budget = int(trade_capital // num_stocks)
 
-
+# out_of_sample_start = in_sample_end
 out_of_sample_win_start = out_of_sample_start - window
 out_of_sample_end = out_of_sample_start + quarter
 out_of_sample_df = close_prices_df.iloc[out_of_sample_win_start:out_of_sample_end]
 
-out_of_sample_test = OutOfSampleBacktest(out_of_sample_close_df=out_of_sample_df, start_ix=window, window=window, pair_budget=stock_budget)
+out_of_sample_test = OutOfSampleBacktest()
 
 # https://www.wallstreetmojo.com/portfolio-return-formula/
 
-all_transactions: list[List[PairTransaction]] = list()
+all_transactions: List[List[PairTransaction]] = list()
 for cur_pair in coint_list:
-    pair_transactions: List[PairTransaction] = out_of_sample_test.backtest_pair(pair_info=cur_pair, delta=1.0)
+    pair_transactions: List[PairTransaction] = out_of_sample_test.backtest_pair(pair_info=cur_pair,
+                                                                                out_of_sample_close_df=out_of_sample_df,
+                                                                                start_ix=window,
+                                                                                window=window,
+                                                                                delta=stddev_delta,
+                                                                                pair_budget=stock_budget)
     all_transactions.append(pair_transactions)
+
+quarter_start_date = close_prices_df.index[out_of_sample_start]
+quarter_end_date = close_prices_df.index[out_of_sample_end]
 
 trades_per_pair = list(len(pair_trans) for pair_trans in all_transactions)
 plt.hist(trades_per_pair, bins='auto')
-plt.title('Trades per Pair')
+plt.title(f'Trades per Pair {quarter_start_date} - {quarter_end_date}')
 plt.show()
 
+abs_profit_loss = 0
 quarter_return = 0.0
 w = 1.0/100.0
 for trans_list in all_transactions:
     pair_return = 1.0
     for pair_trans in trans_list:
         pair_return = pair_return * (1 + pair_trans.pair_return)
+        abs_profit_loss += pair_trans.total_profit
     pair_return = pair_return - 1
     quarter_return = quarter_return + (w * pair_return)
 
-print(f'quarter return: {round(100 * quarter_return, 2)}')
+print(f'2nd quarter 2007 return: {round(100 * quarter_return, 2)}')
+
+quarter_profit_percent = abs_profit_loss/holdings
+year_profit_percent = ((1 + quarter_profit_percent) ** 4) - 1
+print(f'Profit: {round(abs_profit_loss,0)} = {round(100*(quarter_profit_percent), 2)} percent per quarter, {round(100*year_profit_percent,2)} percent per year')
 
 pass
