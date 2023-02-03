@@ -518,10 +518,12 @@ def plot_pair_data(close_df: pd.DataFrame, pair: CointData, title_prefix: str) -
                        title=f'{title_prefix} spread for {pair.stock_a} and {pair.stock_b}')
 
 
+corr_cutoff = 0.75
+
 in_sample_start = find_date_index.findDateIndex(close_prices_df.index, start_date)
 in_sample_end = in_sample_start + half_year
 in_sample_df = close_prices_df.iloc[in_sample_start:in_sample_end]
-period_backtest = InSamplePairs(in_sample_close_df=in_sample_df, corr_cutoff=0.75)
+period_backtest = InSamplePairs(in_sample_close_df=in_sample_df, corr_cutoff=corr_cutoff)
 coint_list = period_backtest.get_in_sample_pairs(pairs_list)
 
 spead_stddev = np.array(list(elem.stddev for elem in coint_list))
@@ -627,51 +629,152 @@ class PairTransaction:
         return s
 
 
+class Position:
+    def __init__(self, open_date: datetime, price_a: float, price_b: float, budget: int, position_type: OpenPosition):
+        """
+        spread = stock_A - Weight * Stock_B
+        :param price_a: the current price of stock A
+        :param price_b: the current price of stock B
+        :param weight: the weighting factor for stock_B
+        :param budget: the cash that can be allocated for the long/short position
+        :param position_type: an enumeration value indicating the position type
+        """
+        self.position_type = position_type
+        self.open_date = open_date
+        self.price_a = price_a  # share price for stock A at time of position open
+        self.price_b = price_b  # share price for stock B at time of position open
+        self.shares_a = 0
+        self.shares_b = 0
+        self.cost_a = 0
+        self.cost_b = 0
+        self.margin: int = 0  # The margin amount above the value of the long position
+        if position_type == OpenPosition.SHORT_A_LONG_B:
+            # Short A
+            self.shares_a = budget // self.price_a
+            self.cost_a = round(self.shares_a * self.price_a, 0)
+            # Cash is the amount from the short of A plus any cash left over
+            cash = self.cost_a + (budget - self.cost_a)
+            # An approximately equal amount of cash is used to for the long postion.
+            self.shares_b = cash // self.price_b
+            self.cost_b = round(self.shares_b * self.price_b, 0)
+            # The required margin is 150% of the short position. The long position can be used for the margin
+            required_margin = round(self.cost_a + self.cost_a * OutOfSampleBacktest_v1.initial_margin_percent, 0)
+            self.margin = max(required_margin - self.cost_b, 0)
+        elif position_type == OpenPosition.LONG_A_SHORT_B:
+            # Short weight * B
+            self.shares_b = budget // self.price_b
+            self.cost_b = round(self.shares_b * self.price_b, 0)
+            cash = self.cost_b + (budget - self.cost_b)
+            # Long A
+            self.shares_a = cash // self.price_a
+            self.cost_a = round(self.shares_a * self.price_a, 0)
+            required_margin = round(self.cost_b + self.cost_b * OutOfSampleBacktest_v1.initial_margin_percent, 0)
+            self.margin = max(required_margin - self.cost_a, 0)
+
+
 class OutOfSampleBacktest:
+
+    def __init__(self, holdings: int) -> None:
+        self.holdings = holdings
+
+    def backtest_pairs_list(self,
+                            close_prices_df: pd.DataFrame,
+                            pair_list: List[CointData],
+                            start_date: datetime,
+                            back_window: int,
+                            trading_period: int,
+                            delta: float):
+        """
+        Backtest a list of pairs over a single out-of-sample trading period.
+
+        :param close_prices_df: the close prices for the stock data set
+        :param pair_list: the list of pairs to be back tested
+        :param start_date: the start date where the test begins. This date must be the date that followed the
+                           in-sample period used to select the pairs
+        :param back_window: a window backward used for the running mean and standard deviation
+        :param trading_period: the width of the trading period
+        :param delta: the multiplier for the standard deviation used in the Bollinger band
+        :return:
+        """
+        date_index = close_prices_df.index
+        start_ix = find_date_index.findDateIndex(date_index, start_date)
+        assert start_ix > 0
+        assert (start_ix - window) >= 0
+
+
+class HistoricalBacktest:
+    def __init__(self,
+                 pairs_list: List[Tuple],
+                 holdings: int,
+                 num_pairs: int,
+                 corr_cutoff: float,
+                 in_sample_days: int,
+                 out_of_sample_days: int,
+                 back_window: int) -> None:
+        """
+        Back test pairs trading through a historical period
+        :param pairs_list: the list of possible pairs from the S&P 500. Each Tuple consists of the pair stock
+                           symbols and the industry sector. For example: ('AAPL', 'ACN', 'information-technology')
+        :param holdings: The trading capital. Because this is a long-short strategy, this is the amount of cash
+                         that can be used for the required margin.
+        :param num_pairs: the total number of pairs to be traded
+        :param corr_cutoff: the correlation cutoff to be used as the first filter in pairs selection.
+                            For example: 0.75
+        :param in_sample_days: the number of days in the in-sample period used to select pairs
+        :param out_of_sample_days: the number of days in th out-of-sample trading period
+        :param back_window: the look-back window used to calculate the running mean and standard deviation
+        """
+        assert back_window < in_sample_days
+        self.pairs_list = pairs_list
+        self.holdings = holdings
+        self.num_pairs = num_pairs
+        self.corr_cutoff = corr_cutoff
+        self.in_sample_days = in_sample_days
+        self.out_of_sample_days = out_of_sample_days
+        self.back_window = back_window
+
+
+    def historical_backtest(self,
+                            close_prices_df: pd.DataFrame,
+                            start_date: datetime,
+                            delta: float):
+        date_index = close_prices_df.index
+        start_ix = find_date_index.findDateIndex(date_index, start_date)
+        assert start_ix >= 0
+        end_ix = close_prices_df.shape[0] # number of rows in close_prices_df
+        print(f'index range: {start_ix} - end_ix: {end_ix}')
+        for ix in range(start_ix, end_ix - (self.in_sample_days + self.out_of_sample_days), self.out_of_sample_days):
+            in_sample_end_ix = ix + self.in_sample_days
+            in_sample_date_start = date_index[ix]
+            in_sample_date_end = date_index[in_sample_end_ix]
+            out_of_sample_start = in_sample_end_ix - self.back_window
+            out_of_sample_end = in_sample_end_ix + self.out_of_sample_days
+            out_of_sample_date_start = date_index[out_of_sample_start]
+            out_of_sample_date_end = date_index[out_of_sample_end]
+            print(f'in-sample: {ix}:{in_sample_end_ix} {in_sample_date_start}:{in_sample_date_end}')
+            print(f'out-of-sample: {out_of_sample_start}:{out_of_sample_end} {out_of_sample_date_start}:{out_of_sample_date_end}')
+            # in_sample_close_df = pd.DataFrame(close_prices_df.iloc[in_sample_start:in_sample_end])
+            # out_of_sample_df = pd.DataFrame(close_prices_df.iloc[in_sample_end-window:in_sample_end+self.out_of_sample_days])
+
+
+holdings = 100000
+num_pairs = 100
+delta = 1.0
+
+
+historical_backtest = HistoricalBacktest(pairs_list=pairs_list,
+                                         holdings=holdings,
+                                         num_pairs=num_pairs,
+                                         corr_cutoff=corr_cutoff,
+                                         in_sample_days=half_year,
+                                         out_of_sample_days=quarter,
+                                         back_window=quarter//3)
+historical_backtest.historical_backtest(close_prices_df=close_prices_df, start_date=start_date, delta=delta)
+pass
+
+class OutOfSampleBacktest_v1:
     initial_margin_percent = 0.50
     reg_T_margin_percent = 0.25
-
-    class Position:
-        def __init__(self, open_date: datetime, price_a: float, price_b: float, budget: int, position_type: OpenPosition):
-            """
-            spread = stock_A - Weight * Stock_B
-            :param price_a: the current price of stock A
-            :param price_b: the current price of stock B
-            :param weight: the weighting factor for stock_B
-            :param budget: the cash that can be allocated for the long/short position
-            :param position_type: an enumeration value indicating the position type
-            """
-            self.position_type = position_type
-            self.open_date = open_date
-            self.price_a = price_a  # share price for stock A at time of position open
-            self.price_b = price_b  # share price for stock B at time of position open
-            self.shares_a = 0
-            self.shares_b = 0
-            self.cost_a = 0
-            self.cost_b = 0
-            self.margin: int = 0  # The margin amount above the value of the long position
-            if position_type == OpenPosition.SHORT_A_LONG_B:
-                # Short A
-                self.shares_a = budget // self.price_a
-                self.cost_a = round(self.shares_a * self.price_a, 0)
-                # Cash is the amount from the short of A plus any cash left over
-                cash = self.cost_a + (budget - self.cost_a)
-                # An approximately equal amount of cash is used to for the long postion.
-                self.shares_b = cash // self.price_b
-                self.cost_b = round(self.shares_b * self.price_b, 0)
-                # The required margin is 150% of the short position. The long position can be used for the margin
-                required_margin = round(self.cost_a + self.cost_a * OutOfSampleBacktest.initial_margin_percent, 0)
-                self.margin = max(required_margin - self.cost_b, 0)
-            elif position_type == OpenPosition.LONG_A_SHORT_B:
-                # Short weight * B
-                self.shares_b = budget // self.price_b
-                self.cost_b = round(self.shares_b * self.price_b, 0)
-                cash = self.cost_b + (budget - self.cost_b)
-                # Long A
-                self.shares_a = cash // self.price_a
-                self.cost_a = round(self.shares_a * self.price_a, 0)
-                required_margin = round(self.cost_b + self.cost_b * OutOfSampleBacktest.initial_margin_percent, 0)
-                self.margin = max(required_margin - self.cost_a, 0)
 
     def __init__(self) -> None:
         pass
@@ -846,7 +949,7 @@ out_of_sample_win_start = out_of_sample_start - window
 out_of_sample_end = out_of_sample_start + quarter
 out_of_sample_df = close_prices_df.iloc[out_of_sample_win_start:out_of_sample_end]
 
-out_of_sample_test = OutOfSampleBacktest()
+out_of_sample_test = OutOfSampleBacktest_v1()
 
 # https://www.wallstreetmojo.com/portfolio-return-formula/
 
