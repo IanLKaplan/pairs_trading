@@ -5,7 +5,7 @@ import yfinance as yf
 
 from datetime import datetime, timedelta
 from utils.convert_date import convert_date
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 
 
 class MarketData:
@@ -100,9 +100,10 @@ class MarketData:
 
     def get_close_data(self, stock_list: list) -> pd.DataFrame:
         # fetch the close data in parallel
+        n_cores = cpu_count()
         close_df = pd.DataFrame()
         assert len(stock_list) > 0
-        with Pool() as mp_pool:
+        with Pool(processes=(n_cores*2)) as mp_pool:
             close_list = mp_pool.map(self.read_data, stock_list)
         # close_list = list()
         # for sym in stock_list:
