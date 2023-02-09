@@ -870,6 +870,20 @@ class HistoricalBacktest:
                                           margin=int(position.margin))
         return transaction
 
+
+    def process_day_transactions(self, transaction_l: List[PairTransaction], holdings: int) -> int:
+        cur_holdings = holdings
+        if len(transaction_l) > 0:
+            day_profit_loss_l = list(trans.total_profit for trans in transaction_l)
+            profit_loss_total = sum(day_profit_loss_l)
+            cur_holdings = cur_holdings + profit_loss_total
+            day_trans_df = pd.DataFrame(trans.__dict__ for trans in transaction_l)
+            self.all_transactions = pd.concat([self.all_transactions, day_trans_df], axis=0)
+        return cur_holdings
+
+    def close_open_positions(self, day_close_df: pd.DataFrame, holdings: int) -> int:
+        pass
+
     def manage_position(self, day_stats: DailyStats, current_date: datetime, daily_transactions: List[PairTransaction]) -> None:
         assert day_stats.key in self.open_positions
         position = self.open_positions[day_stats.key]
@@ -884,6 +898,7 @@ class HistoricalBacktest:
             transaction = self.close_position(position, current_date, day_stats.stock_a, day_stats.stock_b)
         if transaction is not None:
             daily_transactions.append(transaction)
+            del self.open_positions[day_stats.key]
 
     def open_position(self, day_stats: DailyStats, current_date: datetime, stock_budget: int) -> None:
         position = None
@@ -919,6 +934,7 @@ class HistoricalBacktest:
     def out_of_sample_test(self, start_ix: int, out_of_sample_df: pd.DataFrame, pairs_list: List[CointData], holdings: int) -> int:
         out_of_sample_index = out_of_sample_df.index
         end_ix = out_of_sample_df.shape[0]
+        out_of_sample_day = pd.DataFrame()
         for row_ix in range(start_ix,end_ix):
             pair_budget = self.calc_pair_budget(holdings)
             daily_transactions: List[PairTransaction] = list()
@@ -939,13 +955,9 @@ class HistoricalBacktest:
                     self.manage_position(day_stats, current_date=row_date, daily_transactions=daily_transactions)
                 else: # Possibly open a position depending on the spread
                     self.open_position(day_stats, current_date=row_date, stock_budget=pair_budget)
-            if len(daily_transactions) > 0:
-                day_profit_loss_l = list(trans.total_profit for trans in daily_transactions)
-                profit_loss_total = sum(day_profit_loss_l)
-                holdings = holdings + profit_loss_total
-                day_trans_df = pd.DataFrame(trans.__dict__ for trans in daily_transactions)
-                self.all_transactions = pd.concat([self.all_transactions, day_trans_df], axis=0)
-                pass
+            holdings = self.process_day_transactions(daily_transactions, holdings)
+        if len(self.open_positions) > 0:
+            holdings = self.close_open_positions(day_close_df=out_of_sample_day, holdings=holdings)
         return holdings
 
 
