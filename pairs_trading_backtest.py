@@ -276,7 +276,7 @@
 import os
 from datetime import datetime
 from enum import Enum
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Callable
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -546,8 +546,26 @@ plot_pair_data(in_sample_df, pair, 'In-sample')
 plot_pair_data(out_of_sample_df, pair, 'Out-of-sample')
 
 
+def linear_regression_spread(pair: CointData, stock_a_df: pd.DataFrame, stock_b_df: pd.DataFrame) -> pd.DataFrame:
+    spread_df = pd.DataFrame(stock_a_df.values - pair.intercept - pair.weight * stock_b_df.values)
+    return spread_df
+
+def division_spread(not_used: CointData, stock_a_df: pd.DataFrame, stock_b_df: pd.DataFrame) -> pd.DataFrame:
+    spread_df = pd.DataFrame(stock_a_df.values / stock_b_df.values)
+    return spread_df
+
+def linear_regression_spread_day(pair: CointData, stock_a: float, stock_b: float) -> float:
+    spread = stock_a - pair.intercept - pair.weight * stock_b
+    return spread
+
+def division_spread_day(not_used: CointData, stock_a: float, stock_b: float) -> float:
+    spread = stock_a / stock_b
+    return spread
+
+
 def plot_mean_spread(pair: CointData, close_prices_df: pd.DataFrame, start_ix: int, data_window: int,
-                     mean_window: int, stddev_delta: float, title: str) -> None:
+                     mean_window: int, stddev_delta: float, title: str,
+                     spread_function: Callable[[CointData, pd.DataFrame, pd.DataFrame], pd.DataFrame]) -> None:
     """
     Starting at start_ix calculate the spread from start_ix to start_ix + data_window.
     Calculate the rolling mean from start_ix
@@ -563,7 +581,7 @@ def plot_mean_spread(pair: CointData, close_prices_df: pd.DataFrame, start_ix: i
     index_from_window = index[window:]
     stock_a_df = close_prices_df[pair.stock_a].iloc[start_ix:end_ix]
     stock_b_df = close_prices_df[pair.stock_b].iloc[start_ix:end_ix]
-    spread_df = pd.DataFrame(stock_a_df.values - pair.intercept - pair.weight * stock_b_df.values)
+    spread_df = spread_function(pair, stock_a_df, stock_b_df)
     spread_df.columns = ['Spread']
     spread_mean_df = spread_df.rolling(mean_window).mean().iloc[mean_window:]
     spread_mean_df.columns = ['Mean']
@@ -582,18 +600,28 @@ def plot_mean_spread(pair: CointData, close_prices_df: pd.DataFrame, start_ix: i
     data_df.plot(grid=True, title=title, figsize=(10, 6))
 
 
-stddev_delta = 1.0
+delta = 2.0
 
 window = trading_days // 12
 window_in_of_sample_start = in_sample_start
 plot_mean_spread(pair=pair, close_prices_df=close_prices_df, start_ix=window_in_of_sample_start,
-                 data_window=half_year - window, mean_window=window, stddev_delta=stddev_delta,
-                 title=f'{pair.key} in-sample with mean and stddev')
+                 data_window=half_year - window, mean_window=window, stddev_delta=delta,
+                 title=f'{pair.key} in-sample with mean and stddev', spread_function=linear_regression_spread)
 
 window_out_of_sample_start = in_sample_end - window
 plot_mean_spread(pair=pair, close_prices_df=close_prices_df, start_ix=window_out_of_sample_start,
-                 data_window=quarter, mean_window=window, stddev_delta=stddev_delta,
-                 title=f'{pair.key} out-of-sample with mean and stddev')
+                 data_window=quarter, mean_window=window, stddev_delta=delta,
+                 title=f'{pair.key} out-of-sample with mean and stddev', spread_function=linear_regression_spread)
+
+window_in_of_sample_start = in_sample_start
+plot_mean_spread(pair=pair, close_prices_df=close_prices_df, start_ix=window_in_of_sample_start,
+                 data_window=half_year - window, mean_window=window, stddev_delta=delta,
+                 title=f'{pair.key} division spread in-sample with mean and stddev', spread_function=division_spread)
+
+window_out_of_sample_start = in_sample_end - window
+plot_mean_spread(pair=pair, close_prices_df=close_prices_df, start_ix=window_out_of_sample_start,
+                 data_window=quarter, mean_window=window, stddev_delta=delta,
+                 title=f'{pair.key} division spread out-of-sample with mean and stddev', spread_function=division_spread)
 
 plt.show()
 
@@ -747,6 +775,43 @@ class OutOfSampleBacktest:
         assert (start_ix - window) >= 0
 
 
+class DailyStats:
+    def __init__(self, key: str, mean: float, stddev: float, day_spread: float, stock_a: float, stock_b: float):
+        self.key = key
+        self.mean = mean
+        self.stddev = stddev
+        self.day_spread = day_spread
+        self.stock_a = stock_a
+        self.stock_b = stock_b
+
+    def __str__(self) -> str:
+        s = f'{self.key} price: {self.stock_a}:{self.stock_b} spread: {self.day_spread} mean: {self.mean} stddev: {self.stddev}'
+        return s
+
+class SpreadStats:
+    def __init__(self,
+                 spread_function: Callable[[CointData, pd.DataFrame, pd.DataFrame], pd.DataFrame],
+                 day_spread: Callable[[CointData, float, float], float]) -> None:
+        self.spread_function = spread_function
+        self.day_spread = day_spread
+
+    def spread_stats(self, pair: CointData,
+                            back_win_stock_a: pd.DataFrame,
+                            back_win_stock_b: pd.DataFrame,
+                            stock_a_day: float,
+                            stock_b_day: float) -> DailyStats:
+        intercept: float = pair.intercept
+        weight: float = pair.weight
+        back_spread_df = self.spread_function(pair, back_win_stock_a, back_win_stock_b)
+        mean = np.mean(back_spread_df.values).round(2)
+        stddev = np.std(back_spread_df.values).round(2)
+        day_spread = self.day_spread(pair, stock_a_day, stock_b_day)
+        stats = DailyStats(key=pair.key, mean=mean, stddev=stddev, day_spread=day_spread, stock_a=stock_a_day,
+                                stock_b=stock_b_day)
+        return stats
+
+
+
 class HistoricalBacktest:
     reg_T_margin_percent = 0.25
 
@@ -758,7 +823,8 @@ class HistoricalBacktest:
                  in_sample_days: int,
                  out_of_sample_days: int,
                  back_window: int,
-                 delta: float) -> None:
+                 delta: float,
+                 spread_stats_obj: SpreadStats) -> None:
         """
         Back test pairs trading through a historical period
         :param pairs_list: the list of possible pairs from the S&P 500. Each Tuple consists of the pair stock
@@ -782,34 +848,8 @@ class HistoricalBacktest:
         self.out_of_sample_days = out_of_sample_days
         self.back_window = back_window
         self.delta = delta
+        self.spread_stats_obj = spread_stats_obj
 
-    class DailyStats:
-        def __init__(self, key: str, mean: float, stddev: float, day_spread: float, stock_a: float, stock_b: float):
-            self.key = key
-            self.mean = mean
-            self.stddev = stddev
-            self.day_spread = day_spread
-            self.stock_a = stock_a
-            self.stock_b = stock_b
-
-        def __str__(self) -> str:
-            s = f'{self.key} price: {self.stock_a}:{self.stock_b} spread: {self.day_spread} mean: {self.mean} stddev: {self.stddev}'
-            return s
-
-    def out_of_sample_stats(self, pair: CointData,
-                            back_win_stock_a: pd.Series,
-                            back_win_stock_b: pd.Series,
-                            stock_a_day: float,
-                            stock_b_day: float) -> DailyStats:
-        intercept: float = pair.intercept
-        weight: float = pair.weight
-        back_spread = back_win_stock_a.values - intercept - (weight * back_win_stock_b.values)
-        mean = np.mean(back_spread).round(2)
-        stddev = np.std(back_spread).round(2)
-        day_spread = stock_a_day - intercept - (weight * stock_b_day)
-        stats = self.DailyStats(key=pair.key, mean=mean, stddev=stddev, day_spread=day_spread, stock_a=stock_a_day,
-                                stock_b=stock_b_day)
-        return stats
 
     def update_margin(self, position: Position, day_stats: DailyStats, current_date: datetime) -> None:
         """
@@ -1040,15 +1080,15 @@ class HistoricalBacktest:
             out_of_sample_day = out_of_sample_df.iloc[row_ix]
             row_date = pd.to_datetime(out_of_sample_index[row_ix])
             for pair in pairs_list:
-                back_win_stock_a = out_of_sample_back[pair.stock_a]
-                back_win_stock_b = out_of_sample_back[pair.stock_b]
+                back_win_stock_a = pd.DataFrame(out_of_sample_back[pair.stock_a])
+                back_win_stock_b = pd.DataFrame(out_of_sample_back[pair.stock_b])
                 stock_a_day = out_of_sample_day[pair.stock_a]
                 stock_b_day = out_of_sample_day[pair.stock_b]
-                day_stats: HistoricalBacktest.DailyStats = self.out_of_sample_stats(pair=pair,
-                                                                                    back_win_stock_a=back_win_stock_a,
-                                                                                    back_win_stock_b=back_win_stock_b,
-                                                                                    stock_a_day=stock_a_day,
-                                                                                    stock_b_day=stock_b_day)
+                day_stats: DailyStats = self.spread_stats_obj.spread_stats(pair=pair,
+                                                                           back_win_stock_a=back_win_stock_a,
+                                                                           back_win_stock_b=back_win_stock_b,
+                                                                           stock_a_day=stock_a_day,
+                                                                           stock_b_day=stock_b_day)
                 if pair.key in open_positions:
                     self.manage_position(day_stats=day_stats,
                                          current_date=row_date,
@@ -1139,9 +1179,12 @@ class ReturnCalculation:
         return port_a
 
 
+print('linear regression spread')
 initial_holdings = 100000
 num_pairs = 100
-delta = 1.0
+
+spread_stats_obj = SpreadStats(linear_regression_spread, linear_regression_spread_day)
+
 
 historical_backtest = HistoricalBacktest(pairs_list=pairs_list,
                                          initial_holdings=initial_holdings,
@@ -1150,7 +1193,29 @@ historical_backtest = HistoricalBacktest(pairs_list=pairs_list,
                                          in_sample_days=half_year,
                                          out_of_sample_days=quarter,
                                          back_window=quarter // 3,
-                                         delta=delta)
+                                         delta=delta,
+                                         spread_stats_obj=spread_stats_obj)
+cur_holdings, all_transactions_df = historical_backtest.historical_backtest(close_prices_df=close_prices_df,
+                                                                            start_date=start_date,
+                                                                            delta=delta)
+
+
+print("Division Spread")
+
+initial_holdings = 100000
+spread_stats_obj = SpreadStats(division_spread, division_spread_day)
+
+
+historical_backtest = HistoricalBacktest(pairs_list=pairs_list,
+                                         initial_holdings=initial_holdings,
+                                         num_pairs=num_pairs,
+                                         corr_cutoff=corr_cutoff,
+                                         in_sample_days=half_year,
+                                         out_of_sample_days=quarter,
+                                         back_window=quarter // 3,
+                                         delta=delta,
+                                         spread_stats_obj=spread_stats_obj)
+
 cur_holdings, all_transactions_df = historical_backtest.historical_backtest(close_prices_df=close_prices_df,
                                                                             start_date=start_date,
                                                                             delta=delta)
