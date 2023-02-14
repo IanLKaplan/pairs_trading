@@ -11,7 +11,7 @@
 #     language: python
 #     name: python3
 # ---
-
+import faulthandler
 # <h2>
 # Backtesting a Pairs Trading Strategy
 # </h2>
@@ -276,7 +276,7 @@
 import os
 from datetime import datetime
 from enum import Enum
-from typing import List, Tuple, Dict, Callable
+from typing import List, Tuple, Dict, Callable, Set
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -546,26 +546,8 @@ plot_pair_data(in_sample_df, pair, 'In-sample')
 plot_pair_data(out_of_sample_df, pair, 'Out-of-sample')
 
 
-def linear_regression_spread(pair: CointData, stock_a_df: pd.DataFrame, stock_b_df: pd.DataFrame) -> pd.DataFrame:
-    spread_df = pd.DataFrame(stock_a_df.values - pair.intercept - pair.weight * stock_b_df.values)
-    return spread_df
-
-def division_spread(not_used: CointData, stock_a_df: pd.DataFrame, stock_b_df: pd.DataFrame) -> pd.DataFrame:
-    spread_df = pd.DataFrame(stock_a_df.values / stock_b_df.values)
-    return spread_df
-
-def linear_regression_spread_day(pair: CointData, stock_a: float, stock_b: float) -> float:
-    spread = stock_a - pair.intercept - pair.weight * stock_b
-    return spread
-
-def division_spread_day(not_used: CointData, stock_a: float, stock_b: float) -> float:
-    spread = stock_a / stock_b
-    return spread
-
-
 def plot_mean_spread(pair: CointData, close_prices_df: pd.DataFrame, start_ix: int, data_window: int,
-                     mean_window: int, stddev_delta: float, title: str,
-                     spread_function: Callable[[CointData, pd.DataFrame, pd.DataFrame], pd.DataFrame]) -> None:
+                     mean_window: int, stddev_delta: float, title: str ) -> None:
     """
     Starting at start_ix calculate the spread from start_ix to start_ix + data_window.
     Calculate the rolling mean from start_ix
@@ -581,7 +563,7 @@ def plot_mean_spread(pair: CointData, close_prices_df: pd.DataFrame, start_ix: i
     index_from_window = index[window:]
     stock_a_df = close_prices_df[pair.stock_a].iloc[start_ix:end_ix]
     stock_b_df = close_prices_df[pair.stock_b].iloc[start_ix:end_ix]
-    spread_df = spread_function(pair, stock_a_df, stock_b_df)
+    spread_df = pd.DataFrame(stock_a_df.values - pair.intercept - pair.weight * stock_b_df.values)
     spread_df.columns = ['Spread']
     spread_mean_df = spread_df.rolling(mean_window).mean().iloc[mean_window:]
     spread_mean_df.columns = ['Mean']
@@ -606,22 +588,12 @@ window = trading_days // 12
 window_in_of_sample_start = in_sample_start
 plot_mean_spread(pair=pair, close_prices_df=close_prices_df, start_ix=window_in_of_sample_start,
                  data_window=half_year - window, mean_window=window, stddev_delta=delta,
-                 title=f'{pair.key} in-sample with mean and stddev', spread_function=linear_regression_spread)
+                 title=f'{pair.key} in-sample with mean and stddev')
 
 window_out_of_sample_start = in_sample_end - window
 plot_mean_spread(pair=pair, close_prices_df=close_prices_df, start_ix=window_out_of_sample_start,
                  data_window=quarter, mean_window=window, stddev_delta=delta,
-                 title=f'{pair.key} out-of-sample with mean and stddev', spread_function=linear_regression_spread)
-
-window_in_of_sample_start = in_sample_start
-plot_mean_spread(pair=pair, close_prices_df=close_prices_df, start_ix=window_in_of_sample_start,
-                 data_window=half_year - window, mean_window=window, stddev_delta=delta,
-                 title=f'{pair.key} division spread in-sample with mean and stddev', spread_function=division_spread)
-
-window_out_of_sample_start = in_sample_end - window
-plot_mean_spread(pair=pair, close_prices_df=close_prices_df, start_ix=window_out_of_sample_start,
-                 data_window=quarter, mean_window=window, stddev_delta=delta,
-                 title=f'{pair.key} division spread out-of-sample with mean and stddev', spread_function=division_spread)
+                 title=f'{pair.key} out-of-sample with mean and stddev')
 
 plt.show()
 
@@ -631,22 +603,39 @@ class OpenPosition(Enum):
     SHORT_A_LONG_B = 2
     LONG_A_SHORT_B = 3
     SHARE_PRICE_OUT_OF_BUDGET = 4
+    OUT_OF_MARGIN = 5
 
 
 class DayTransactions:
 
-    def __init__(self, day_date: datetime, num_trades: int, days_open: List[int], day_profit: float, day_return: float,
-                 max_margin: int):
+    def __init__(self,
+                 day_date: datetime,
+                 positive_trades: int,
+                 negative_trades: int,
+                 days_open: List[int],
+                 day_profit: float,
+                 day_return: float,
+                 margin: int):
+        """
+        :param day_date: the date for the day
+        :param positive_trades: number of pair transactions that were profitable
+        :param negative_trades: number of pair transactions that were at a loss
+        :param days_open: a list of the number of days that the pair positions were open. len(days_open) = num pairs
+        :param day_profit: the total profit (or loss)
+        :param day_return: the total return
+        :param margin: the total margin
+        """
         self.day_date = day_date
-        self.num_trades = num_trades
+        self.positive_trades = positive_trades
+        self.negative_trades = negative_trades
         self.days_open = days_open
         self.day_profit = day_profit
         self.day_return = day_return
-        self.margin = max_margin
+        self.margin = margin
 
     def __str__(self):
         format = '%Y-%m-%d'
-        s1 = f'date: {self.day_date.strftime(format)} trades: {self.num_trades} profit: {round(self.day_profit, 2)}'
+        s1 = f'date: {self.day_date.strftime(format)} win trades: {self.positive_trades} loss trades: {self.negative_trades} profit: {round(self.day_profit, 2)}'
         s2 = f'return: {round(self.day_return, 4)} margin: {self.margin}'
         return s1 + s2
 
@@ -664,10 +653,12 @@ class PairTransaction:
                  pair_return: float,
                  margin: int) -> None:
         """
-        :param open_date: the date the transaction was opened
+        :param pair the pair ticker symbols concatenated as a string. Example: 'HUM:VRTX'
         :param close_date: the date the transaction was closed
+        :param days_open the number of days that the pair position was open
+        :param total_profit the profit (or loss) from closing the pair position
         :param pair_return: the return of the long-short position
-        :param initial_margin: the margin cash required when the position was opened
+        :param margin: the margin cash required while the short position was open
         """
         self.pair = pair
         self.close_date = close_date
@@ -675,16 +666,11 @@ class PairTransaction:
         self.total_profit = total_profit
         self.pair_return = pair_return
         self.margin = margin
-        # return on investment relative to the required margin cash
-        if self.margin > 0:
-            self.ROI = self.total_profit / self.margin
-        else:
-            self.ROI = 0.99
 
     def __str__(self):
         format = '%Y-%m-%d'
         s1 = f'{self.pair} days open: {self.days_open}, close date: {self.close_date.strftime(format)}, '
-        s2 = f'profit: {self.total_profit}, return: {self.pair_return}, margin: {self.margin} ROI: {self.ROI}'
+        s2 = f'profit: {self.total_profit}, return: {self.pair_return}, margin: {self.margin}'
         s = s1 + s2
         return s
 
@@ -788,29 +774,6 @@ class DailyStats:
         s = f'{self.key} price: {self.stock_a}:{self.stock_b} spread: {self.day_spread} mean: {self.mean} stddev: {self.stddev}'
         return s
 
-class SpreadStats:
-    def __init__(self,
-                 spread_function: Callable[[CointData, pd.DataFrame, pd.DataFrame], pd.DataFrame],
-                 day_spread: Callable[[CointData, float, float], float]) -> None:
-        self.spread_function = spread_function
-        self.day_spread = day_spread
-
-    def spread_stats(self, pair: CointData,
-                            back_win_stock_a: pd.DataFrame,
-                            back_win_stock_b: pd.DataFrame,
-                            stock_a_day: float,
-                            stock_b_day: float) -> DailyStats:
-        intercept: float = pair.intercept
-        weight: float = pair.weight
-        back_spread_df = self.spread_function(pair, back_win_stock_a, back_win_stock_b)
-        mean = np.mean(back_spread_df.values).round(2)
-        stddev = np.std(back_spread_df.values).round(2)
-        day_spread = self.day_spread(pair, stock_a_day, stock_b_day)
-        stats = DailyStats(key=pair.key, mean=mean, stddev=stddev, day_spread=day_spread, stock_a=stock_a_day,
-                                stock_b=stock_b_day)
-        return stats
-
-
 
 class HistoricalBacktest:
     reg_T_margin_percent = 0.25
@@ -823,8 +786,7 @@ class HistoricalBacktest:
                  in_sample_days: int,
                  out_of_sample_days: int,
                  back_window: int,
-                 delta: float,
-                 spread_stats_obj: SpreadStats) -> None:
+                 delta: float) -> None:
         """
         Back test pairs trading through a historical period
         :param pairs_list: the list of possible pairs from the S&P 500. Each Tuple consists of the pair stock
@@ -848,7 +810,23 @@ class HistoricalBacktest:
         self.out_of_sample_days = out_of_sample_days
         self.back_window = back_window
         self.delta = delta
-        self.spread_stats_obj = spread_stats_obj
+
+    def spread_stats(self, pair: CointData,
+                     back_win_stock_a: pd.DataFrame,
+                     back_win_stock_b: pd.DataFrame,
+                     stock_a_day: float,
+                     stock_b_day: float) -> DailyStats:
+        intercept: float = pair.intercept
+        weight: float = pair.weight
+
+        back_spread_df = pd.DataFrame(
+            back_win_stock_a.values - pair.intercept - pair.weight * back_win_stock_b.values)
+        mean = np.mean(back_spread_df.values).round(2)
+        stddev = np.std(back_spread_df.values).round(2)
+        day_spread = stock_a_day - pair.intercept - pair.weight * stock_b_day
+        stats = DailyStats(key=pair.key, mean=mean, stddev=stddev, day_spread=day_spread, stock_a=stock_a_day,
+                           stock_b=stock_b_day)
+        return stats
 
 
     def update_margin(self, position: Position, day_stats: DailyStats, current_date: datetime) -> None:
@@ -947,7 +925,7 @@ class HistoricalBacktest:
                                           margin=int(position.margin))
         return transaction
 
-    # day_date: datetime, num_trades: int, days_open: List[int], day_profit: float, day_return: float, max_margin: int)
+
     def process_day_transactions(self,
                                  day_date: datetime,
                                  transaction_l: List[PairTransaction],
@@ -961,18 +939,25 @@ class HistoricalBacktest:
             day_return = 0.0
             margin = 0
             day_profit = 0.0
+            win_trades = 0
+            loss_trades = 0
             for trans in transaction_l:
                 open_days_l.append(trans.days_open)
                 day_return = day_return + port_weight * trans.pair_return
                 margin = margin + trans.margin
+                if trans.total_profit > 0:
+                    win_trades += 1
+                else:
+                    loss_trades += 1
                 day_profit = day_profit + trans.total_profit
             cur_holdings = cur_holdings + day_profit
             day_transactions = DayTransactions(day_date=day_date,
-                                               num_trades=num_trades,
+                                               positive_trades=win_trades,
+                                               negative_trades=loss_trades,
                                                days_open=open_days_l,
                                                day_profit=day_profit,
                                                day_return=day_return,
-                                               max_margin=margin)
+                                               margin=margin)
         return cur_holdings, day_transactions
 
     def close_open_positions(self,
@@ -1005,7 +990,9 @@ class HistoricalBacktest:
                         current_date: datetime,
                         day_index: int,
                         daily_transactions: List[PairTransaction],
-                        open_positions: Dict[str, Position]) -> None:
+                        open_positions: Dict[str, Position],
+                        margin_budget: int) -> bool:
+        remove_pair = False
         assert day_stats.key in open_positions
         position = open_positions[day_stats.key]
         self.update_margin(position, day_stats, current_date)
@@ -1021,9 +1008,16 @@ class HistoricalBacktest:
             if day_stats.day_spread >= day_stats.mean:
                 transaction = self.close_position(position, current_date, day_index, day_stats.stock_a,
                                                   day_stats.stock_b)
+        if transaction is None:
+            # The position was not closed, so check the margin and see if it is over budget
+            if position.margin > margin_budget:
+                transaction = self.close_position(position, current_date, day_index, day_stats.stock_a,
+                                                  day_stats.stock_b)
+                remove_pair = True
         if transaction is not None:
             daily_transactions.append(transaction)
             del open_positions[day_stats.key]
+        return remove_pair
 
     def open_position(self,
                       day_stats: DailyStats,
@@ -1062,6 +1056,11 @@ class HistoricalBacktest:
         stock_budget = int(trade_capital // self.num_pairs)
         return stock_budget
 
+    def calc_margin_budget(self, holdings: int) -> int:
+        margin_budget = int(holdings//self.num_pairs)
+        return margin_budget
+
+
     def out_of_sample_test(self, start_ix: int,
                            out_of_sample_df: pd.DataFrame,
                            pairs_list: List[CointData],
@@ -1073,28 +1072,35 @@ class HistoricalBacktest:
         row_ix = 0
         out_of_sample_day = pd.DataFrame()
         day_transactions_l: List[DayTransactions] = list()
+        remove_set: Set[str] = set()
         for row_ix in range(start_ix, end_ix):
             pair_budget = self.calc_pair_budget(holdings)
+            margin_budget = self.calc_margin_budget(holdings)
             daily_transactions: List[PairTransaction] = list()
             out_of_sample_back = out_of_sample_df.iloc[row_ix - self.back_window:row_ix]
             out_of_sample_day = out_of_sample_df.iloc[row_ix]
             row_date = pd.to_datetime(out_of_sample_index[row_ix])
             for pair in pairs_list:
+                if pair.key in remove_set:
+                    continue
                 back_win_stock_a = pd.DataFrame(out_of_sample_back[pair.stock_a])
                 back_win_stock_b = pd.DataFrame(out_of_sample_back[pair.stock_b])
                 stock_a_day = out_of_sample_day[pair.stock_a]
                 stock_b_day = out_of_sample_day[pair.stock_b]
-                day_stats: DailyStats = self.spread_stats_obj.spread_stats(pair=pair,
-                                                                           back_win_stock_a=back_win_stock_a,
-                                                                           back_win_stock_b=back_win_stock_b,
-                                                                           stock_a_day=stock_a_day,
-                                                                           stock_b_day=stock_b_day)
+                day_stats: DailyStats = self.spread_stats(pair=pair,
+                                                          back_win_stock_a=back_win_stock_a,
+                                                          back_win_stock_b=back_win_stock_b,
+                                                          stock_a_day=stock_a_day,
+                                                          stock_b_day=stock_b_day)
                 if pair.key in open_positions:
-                    self.manage_position(day_stats=day_stats,
-                                         current_date=row_date,
-                                         day_index=row_ix,
-                                         daily_transactions=daily_transactions,
-                                         open_positions=open_positions)
+                    remove_pair = self.manage_position(day_stats=day_stats,
+                                                       current_date=row_date,
+                                                       day_index=row_ix,
+                                                       daily_transactions=daily_transactions,
+                                                       open_positions=open_positions,
+                                                       margin_budget=margin_budget)
+                    if remove_pair:
+                        remove_set.add(pair.key)
                 else:  # Possibly open a position depending on the spread
                     self.open_position(day_stats,
                                        current_date=row_date,
@@ -1123,13 +1129,15 @@ class HistoricalBacktest:
     def historical_backtest(self,
                             close_prices_df: pd.DataFrame,
                             start_date: datetime,
-                            delta: float) -> Tuple[int, pd.DataFrame]:
+                            delta: float) -> Tuple[int, pd.DataFrame, pd.DataFrame]:
         date_index = close_prices_df.index
         start_ix = find_date_index.findDateIndex(date_index, start_date)
         assert start_ix >= 0
         end_ix = close_prices_df.shape[0]  # number of rows in close_prices_df
         print(f'index range: {start_ix} - end_ix: {end_ix}')
         all_transactions_df = pd.DataFrame()
+        holdings_l: List[float] = list()
+        holdings_date_l = list()
         holdings = self.initial_holdings
         for ix in range(start_ix, end_ix - (self.in_sample_days + self.out_of_sample_days), self.out_of_sample_days):
             in_sample_end_ix = ix + self.in_sample_days
@@ -1153,7 +1161,12 @@ class HistoricalBacktest:
             if day_transactions_df.shape[1] > 0:
                 all_transactions_df = pd.concat([all_transactions_df, day_transactions_df], axis=0)
             print(f'holdings: {holdings}')
-        return holdings, all_transactions_df
+            holdings_l.append(holdings)
+            holdings_date_l.append(out_of_sample_date_end)
+        holdings_df = pd.DataFrame(holdings_l)
+        holdings_df.index = holdings_date_l
+        holdings_df.columns = ['portfolio balance']
+        return holdings, all_transactions_df, holdings_df
 
 
 class ReturnCalculation:
@@ -1178,13 +1191,11 @@ class ReturnCalculation:
             port_a[i] = port_a[i - 1] + port_a[i - 1] * return_a[i - 1]
         return port_a
 
+faulthandler.enable()
 
-print('linear regression spread')
 initial_holdings = 100000
 num_pairs = 100
 
-spread_stats_obj = SpreadStats(linear_regression_spread, linear_regression_spread_day)
-
 
 historical_backtest = HistoricalBacktest(pairs_list=pairs_list,
                                          initial_holdings=initial_holdings,
@@ -1193,32 +1204,18 @@ historical_backtest = HistoricalBacktest(pairs_list=pairs_list,
                                          in_sample_days=half_year,
                                          out_of_sample_days=quarter,
                                          back_window=quarter // 3,
-                                         delta=delta,
-                                         spread_stats_obj=spread_stats_obj)
-cur_holdings, all_transactions_df = historical_backtest.historical_backtest(close_prices_df=close_prices_df,
+                                         delta=delta)
+cur_holdings, all_transactions_df, holdings_df = historical_backtest.historical_backtest(close_prices_df=close_prices_df,
                                                                             start_date=start_date,
                                                                             delta=delta)
 
 
-print("Division Spread")
+print(tabulate(holdings_df, headers=[*holdings_df.columns], tablefmt='fancy_grid'))
 
-initial_holdings = 100000
-spread_stats_obj = SpreadStats(division_spread, division_spread_day)
-
-
-historical_backtest = HistoricalBacktest(pairs_list=pairs_list,
-                                         initial_holdings=initial_holdings,
-                                         num_pairs=num_pairs,
-                                         corr_cutoff=corr_cutoff,
-                                         in_sample_days=half_year,
-                                         out_of_sample_days=quarter,
-                                         back_window=quarter // 3,
-                                         delta=delta,
-                                         spread_stats_obj=spread_stats_obj)
-
-cur_holdings, all_transactions_df = historical_backtest.historical_backtest(close_prices_df=close_prices_df,
-                                                                            start_date=start_date,
-                                                                            delta=delta)
+m_df = pd.DataFrame( all_transactions_df['margin'] )
+m_df.index = all_transactions_df['day_date']
+m_df.plot(grid=True, title='Required Margin', figsize=(10, 6))
+plt.show()
 
 returns_df = all_transactions_df['day_return']
 
