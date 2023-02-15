@@ -422,10 +422,11 @@ class PairStatistics:
 
 class InSamplePairs:
 
-    def __init__(self, in_sample_close_df: pd.DataFrame, corr_cutoff: float) -> None:
+    def __init__(self, in_sample_close_df: pd.DataFrame, corr_cutoff: float, num_pairs: int) -> None:
         self.corr_cutoff = corr_cutoff
         self.in_sample_close_df = in_sample_close_df
         self.pairs_stats = PairStatistics(self.in_sample_close_df)
+        self.num_pairs = num_pairs
 
     def select_pairs(self, pairs_list: List[Tuple]) -> List[CointData]:
         """
@@ -490,6 +491,7 @@ class InSamplePairs:
         filtered_list = self.filter_pairs_list(coint_data_list)
         # Sort by declining standard deviation value
         filtered_list.sort(key=lambda elem: elem.stddev, reverse=True)
+        filtered_list = filtered_list[0:self.num_pairs]
         return filtered_list
 
 
@@ -524,11 +526,12 @@ def plot_pair_data(close_df: pd.DataFrame, pair: CointData, title_prefix: str) -
 
 
 corr_cutoff = 0.75
+num_pairs = 120
 
 in_sample_start = find_date_index.findDateIndex(close_prices_df.index, start_date)
 in_sample_end = in_sample_start + half_year
 in_sample_df = close_prices_df.iloc[in_sample_start:in_sample_end]
-period_backtest = InSamplePairs(in_sample_close_df=in_sample_df, corr_cutoff=corr_cutoff)
+period_backtest = InSamplePairs(in_sample_close_df=in_sample_df, corr_cutoff=corr_cutoff, num_pairs=num_pairs)
 coint_list = period_backtest.get_in_sample_pairs(pairs_list)
 
 spead_stddev = np.array(list(elem.stddev for elem in coint_list))
@@ -615,6 +618,7 @@ class DayTransactions:
                  days_open: List[int],
                  day_profit: float,
                  day_return: float,
+                 num_open_positions: int,
                  margin: int):
         """
         :param day_date: the date for the day
@@ -623,7 +627,7 @@ class DayTransactions:
         :param days_open: a list of the number of days that the pair positions were open. len(days_open) = num pairs
         :param day_profit: the total profit (or loss)
         :param day_return: the total return
-        :param margin: the total margin
+        :param margin: the open margin for the day, calculated from the open positions.
         """
         self.day_date = day_date
         self.positive_trades = positive_trades
@@ -631,6 +635,7 @@ class DayTransactions:
         self.days_open = days_open
         self.day_profit = day_profit
         self.day_return = day_return
+        self.num_open_positions = num_open_positions
         self.margin = margin
 
     def __str__(self):
@@ -713,7 +718,7 @@ class Position:
             self.shares_b = cash // self.price_b
             cost_b = round(self.shares_b * self.price_b, 0)
             # The required margin is 150% of the short position. The long position can be used for the margin
-            required_margin = round(cost_a + cost_a * self.initial_margin_percent, 0)
+            required_margin = round(cost_a * (1 + self.initial_margin_percent), 0)
             self.margin = max(required_margin - cost_b, 0)
         elif position_type == OpenPosition.LONG_A_SHORT_B:
             # Short weight * B
@@ -723,7 +728,7 @@ class Position:
             # Long A
             self.shares_a = cash // self.price_a
             cost_a = round(self.shares_a * self.price_a, 0)
-            required_margin = round(cost_b + cost_b * self.initial_margin_percent, 0)
+            required_margin = round(cost_b * (1 + self.initial_margin_percent), 0)
             self.margin = max(required_margin - cost_a, 0)
 
     def __str__(self) -> str:
@@ -852,7 +857,7 @@ class HistoricalBacktest:
             long_price = day_stats.stock_a
         short_position = short_shares * short_price
         long_position = long_shares * long_price
-        required_margin = round(short_position + short_position * self.reg_T_margin_percent, 2)
+        required_margin = round(short_position * (1 + self.reg_T_margin_percent), 2)
         required_cash = max(required_margin - long_position, 0)
         position.margin = max(position.margin, required_cash)
 
@@ -925,10 +930,23 @@ class HistoricalBacktest:
                                           margin=int(position.margin))
         return transaction
 
+    def calc_open_position_margin(self, open_positions: Dict[str, Position]) -> int:
+        """
+        Calculate the margin required for the open positions.
+
+        :param open_positions: A dictionary containing the open position data
+        :return: the margin required for the day
+        """
+        open_margin: int = 0
+        for key, position in open_positions.items():
+            open_margin += position.margin
+        return round(open_margin, 0)
+
 
     def process_day_transactions(self,
                                  day_date: datetime,
                                  transaction_l: List[PairTransaction],
+                                 open_positions: Dict[str, Position],
                                  holdings: int) -> Tuple[int, DayTransactions]:
         cur_holdings: int = holdings
         day_transactions = None
@@ -937,19 +955,18 @@ class HistoricalBacktest:
             port_weight = 1.0 / num_trades
             open_days_l: List[int] = list()
             day_return = 0.0
-            margin = 0
             day_profit = 0.0
             win_trades = 0
             loss_trades = 0
             for trans in transaction_l:
                 open_days_l.append(trans.days_open)
                 day_return = day_return + port_weight * trans.pair_return
-                margin = margin + trans.margin
                 if trans.total_profit > 0:
                     win_trades += 1
                 else:
                     loss_trades += 1
                 day_profit = day_profit + trans.total_profit
+            margin = self.calc_open_position_margin(open_positions=open_positions)
             cur_holdings = cur_holdings + day_profit
             day_transactions = DayTransactions(day_date=day_date,
                                                positive_trades=win_trades,
@@ -957,6 +974,7 @@ class HistoricalBacktest:
                                                days_open=open_days_l,
                                                day_profit=day_profit,
                                                day_return=day_return,
+                                               num_open_positions=len(open_positions),
                                                margin=margin)
         return cur_holdings, day_transactions
 
@@ -981,6 +999,7 @@ class HistoricalBacktest:
             close_transactions.append(transaction)
         cur_holdings, day_transactions = self.process_day_transactions(day_date=current_date,
                                                                        transaction_l=close_transactions,
+                                                                       open_positions=open_positions,
                                                                        holdings=holdings)
 
         return cur_holdings, day_transactions
@@ -990,13 +1009,11 @@ class HistoricalBacktest:
                         current_date: datetime,
                         day_index: int,
                         daily_transactions: List[PairTransaction],
-                        open_positions: Dict[str, Position],
-                        margin_budget: int) -> bool:
-        remove_pair = False
+                        open_positions: Dict[str, Position]) -> None:
+        transaction = None
         assert day_stats.key in open_positions
         position = open_positions[day_stats.key]
         self.update_margin(position, day_stats, current_date)
-        transaction = None
         # spread = A - intercept - (W * B)
         # SHORT_A_LONG_B: spread >= mean + delta * stddev : close when spread <= mean
         # LONG_A_SHORT_B: spread <= mean + delta * stddev : close when spread >= mean
@@ -1008,16 +1025,10 @@ class HistoricalBacktest:
             if day_stats.day_spread >= day_stats.mean:
                 transaction = self.close_position(position, current_date, day_index, day_stats.stock_a,
                                                   day_stats.stock_b)
-        if transaction is None:
-            # The position was not closed, so check the margin and see if it is over budget
-            if position.margin > margin_budget:
-                transaction = self.close_position(position, current_date, day_index, day_stats.stock_a,
-                                                  day_stats.stock_b)
-                remove_pair = True
         if transaction is not None:
             daily_transactions.append(transaction)
             del open_positions[day_stats.key]
-        return remove_pair
+
 
     def open_position(self,
                       day_stats: DailyStats,
@@ -1049,17 +1060,12 @@ class HistoricalBacktest:
         # So if we short 200,000 of stock we get 200,000 from the short proceeds which is used to open a long
         # position of 200,000.  In addition, we need 100,000 for the 50 percent margin.
         #
-        # To be conservative we short 160,000 of stock and open a long position of 160,000. This requires a margin of
-        # 80,000 but we allocate 100,000
-        trade_capital = (2 * holdings) * 0.8
+        # All pairs are not traded at the same time, so the actual margin will be much less.
+        #
+        trade_capital = (2 * holdings)
         # required margin would be trade_capital * 0.5 or 80,000
         stock_budget = int(trade_capital // self.num_pairs)
         return stock_budget
-
-    def calc_margin_budget(self, holdings: int) -> int:
-        margin_budget = int(holdings//self.num_pairs)
-        return margin_budget
-
 
     def out_of_sample_test(self, start_ix: int,
                            out_of_sample_df: pd.DataFrame,
@@ -1072,17 +1078,13 @@ class HistoricalBacktest:
         row_ix = 0
         out_of_sample_day = pd.DataFrame()
         day_transactions_l: List[DayTransactions] = list()
-        remove_set: Set[str] = set()
         for row_ix in range(start_ix, end_ix):
             pair_budget = self.calc_pair_budget(holdings)
-            margin_budget = self.calc_margin_budget(holdings)
             daily_transactions: List[PairTransaction] = list()
             out_of_sample_back = out_of_sample_df.iloc[row_ix - self.back_window:row_ix]
             out_of_sample_day = out_of_sample_df.iloc[row_ix]
             row_date = pd.to_datetime(out_of_sample_index[row_ix])
             for pair in pairs_list:
-                if pair.key in remove_set:
-                    continue
                 back_win_stock_a = pd.DataFrame(out_of_sample_back[pair.stock_a])
                 back_win_stock_b = pd.DataFrame(out_of_sample_back[pair.stock_b])
                 stock_a_day = out_of_sample_day[pair.stock_a]
@@ -1093,14 +1095,11 @@ class HistoricalBacktest:
                                                           stock_a_day=stock_a_day,
                                                           stock_b_day=stock_b_day)
                 if pair.key in open_positions:
-                    remove_pair = self.manage_position(day_stats=day_stats,
-                                                       current_date=row_date,
-                                                       day_index=row_ix,
-                                                       daily_transactions=daily_transactions,
-                                                       open_positions=open_positions,
-                                                       margin_budget=margin_budget)
-                    if remove_pair:
-                        remove_set.add(pair.key)
+                    self.manage_position(day_stats=day_stats,
+                                         current_date=row_date,
+                                         day_index=row_ix,
+                                         daily_transactions=daily_transactions,
+                                         open_positions=open_positions)
                 else:  # Possibly open a position depending on the spread
                     self.open_position(day_stats,
                                        current_date=row_date,
@@ -1109,11 +1108,12 @@ class HistoricalBacktest:
                                        open_positions=open_positions)
             holdings, day_transactions = self.process_day_transactions(day_date=row_date,
                                                                        transaction_l=daily_transactions,
+                                                                       open_positions=open_positions,
                                                                        holdings=holdings)
             if day_transactions is not None:
                 day_transactions_l.append(day_transactions)
         if len(open_positions) > 0:
-            # At the end of the trading period all open positions must be closed at the last price
+            # At the end of the trading period (e.g., the quarter) all open positions must be closed at the last price
             holdings, day_transactions = self.close_open_positions(day_close_df=out_of_sample_day,
                                                                    holdings=holdings,
                                                                    open_positions=open_positions,
@@ -1151,7 +1151,7 @@ class HistoricalBacktest:
             print(
                 f'out-of-sample: {out_of_sample_start}:{out_of_sample_end} {out_of_sample_date_start}:{out_of_sample_date_end}')
             in_sample_close_df = pd.DataFrame(close_prices_df.iloc[ix:in_sample_end_ix])
-            in_sample_pairs_obj = InSamplePairs(in_sample_close_df=in_sample_close_df, corr_cutoff=self.corr_cutoff)
+            in_sample_pairs_obj = InSamplePairs(in_sample_close_df=in_sample_close_df, corr_cutoff=self.corr_cutoff, num_pairs=self.num_pairs)
             selected_pairs: List[CointData] = in_sample_pairs_obj.get_in_sample_pairs(pairs_list=self.pairs_list)
             out_of_sample_df = pd.DataFrame(close_prices_df.iloc[out_of_sample_start:out_of_sample_end])
             holdings, day_transactions_df = self.out_of_sample_test(start_ix=self.back_window,
@@ -1194,7 +1194,6 @@ class ReturnCalculation:
 faulthandler.enable()
 
 initial_holdings = 100000
-num_pairs = 100
 
 
 historical_backtest = HistoricalBacktest(pairs_list=pairs_list,
@@ -1212,9 +1211,15 @@ cur_holdings, all_transactions_df, holdings_df = historical_backtest.historical_
 
 print(tabulate(holdings_df, headers=[*holdings_df.columns], tablefmt='fancy_grid'))
 
+transaction_index = all_transactions_df['day_date']
 m_df = pd.DataFrame( all_transactions_df['margin'] )
-m_df.index = all_transactions_df['day_date']
+m_df.index = transaction_index
 m_df.plot(grid=True, title='Required Margin', figsize=(10, 6))
+plt.show()
+
+open_position_count_df = pd.DataFrame( all_transactions_df['num_open_positions'])
+open_position_count_df.index = transaction_index
+open_position_count_df.plot(grid=True, title='Open Positions', figsize=(10, 6))
 plt.show()
 
 returns_df = all_transactions_df['day_return']
