@@ -287,6 +287,9 @@ from dateutil.utils import today
 from statsmodels.tsa.stattools import adfuller
 from tabulate import tabulate
 
+from iteration_utilities import deepflatten
+import ast
+
 from pairs.pairs import get_pairs
 #
 # Local libraries
@@ -302,8 +305,8 @@ sns.set_theme()
 
 s_and_p_file = s_and_p_directory + os.path.sep + s_and_p_stock_file
 
-# start_date_str = '2007-01-03'
-start_date_str = '2020-01-03'
+start_date_str = '2007-01-03'
+# start_date_str = '2020-01-03'
 start_date: datetime = datetime.fromisoformat(start_date_str)
 
 trading_days = 252
@@ -1129,7 +1132,7 @@ class HistoricalBacktest:
     def historical_backtest(self,
                             close_prices_df: pd.DataFrame,
                             start_date: datetime,
-                            delta: float) -> Tuple[int, pd.DataFrame, pd.DataFrame]:
+                            delta: float) -> Tuple[pd.DataFrame, pd.DataFrame]:
         date_index = close_prices_df.index
         start_ix = find_date_index.findDateIndex(date_index, start_date)
         assert start_ix >= 0
@@ -1166,7 +1169,7 @@ class HistoricalBacktest:
         holdings_df = pd.DataFrame(holdings_l)
         holdings_df.index = holdings_date_l
         holdings_df.columns = ['portfolio balance']
-        return holdings, all_transactions_df, holdings_df
+        return all_transactions_df, holdings_df
 
 
 class ReturnCalculation:
@@ -1193,21 +1196,35 @@ class ReturnCalculation:
 
 faulthandler.enable()
 
-initial_holdings = 100000
+pairs_result_dir = 'back_test_data'
+pairs_result_file = 'pairs_backtest.csv'
+pairs_holdings_file = 'holdings.csv'
+pairs_result_path = pairs_result_dir + os.path.sep + pairs_result_file
+holdings_path = pairs_result_dir + os.path.sep + pairs_holdings_file
 
+if not os.path.exists(pairs_result_dir):
+    os.mkdir(pairs_result_dir)
+if not os.path.exists(pairs_result_path):
+    initial_holdings = 100000
+    historical_backtest = HistoricalBacktest(pairs_list=pairs_list,
+                                             initial_holdings=initial_holdings,
+                                             num_pairs=num_pairs,
+                                             corr_cutoff=corr_cutoff,
+                                             in_sample_days=half_year,
+                                             out_of_sample_days=quarter,
+                                             back_window=quarter // 3,
+                                             delta=delta)
+    all_transactions_df, holdings_df = historical_backtest.historical_backtest(close_prices_df=close_prices_df,
+                                                                               start_date=start_date,
+                                                                               delta=delta)
+    all_transactions_df.to_csv(pairs_result_path)
+    holdings_df.to_csv(holdings_path)
+else:
+    all_transactions_df = pd.read_csv(pairs_result_path, index_col=0)
+    holdings_df = pd.read_csv(holdings_path, index_col=0)
 
-historical_backtest = HistoricalBacktest(pairs_list=pairs_list,
-                                         initial_holdings=initial_holdings,
-                                         num_pairs=num_pairs,
-                                         corr_cutoff=corr_cutoff,
-                                         in_sample_days=half_year,
-                                         out_of_sample_days=quarter,
-                                         back_window=quarter // 3,
-                                         delta=delta)
-cur_holdings, all_transactions_df, holdings_df = historical_backtest.historical_backtest(close_prices_df=close_prices_df,
-                                                                            start_date=start_date,
-                                                                            delta=delta)
-
+# 'day_date', 'positive_trades', 'negative_trades', 'days_open',
+#        'day_profit', 'day_return', 'num_open_positions', 'margin'
 
 print(tabulate(holdings_df, headers=[*holdings_df.columns], tablefmt='fancy_grid'))
 
@@ -1221,6 +1238,21 @@ open_position_count_df = pd.DataFrame( all_transactions_df['num_open_positions']
 open_position_count_df.index = transaction_index
 open_position_count_df.plot(grid=True, title='Open Positions', figsize=(10, 6))
 plt.show()
+
+days_open_l = list(all_transactions_df['days_open'])
+# When the all_transactions_df DataFrame is built from the back test code it contains a list of lists
+# for the days_open: [[6, 3, 3], [5], [8, 6, 7], [10, 5, 10, 5, 2, 9]] When the DataFrame is read from
+# a file it contains a list of strings for the lists: ['[6, 3, 3]', '[5]', '[8, 6, 7]', '[10, 5, 10, 5, 2, 9]']
+# If it is a list of string, the string need to be converted to lists. This is done via the ast.literal_eval
+# function.
+if type(days_open_l[0]) == str:
+    days_open_l = list(map(ast.literal_eval, days_open_l))
+days_open = list(deepflatten(days_open_l))
+
+plt.hist(days_open, bins='auto')
+plt.title('Number of days a pair trade is open')
+plt.show()
+
 
 returns_df = all_transactions_df['day_return']
 
