@@ -274,6 +274,7 @@ import faulthandler
 #
 
 import os
+import random
 from datetime import datetime
 from enum import Enum
 from typing import List, Tuple, Dict, Callable, Set
@@ -302,6 +303,10 @@ from utils import find_date_index
 
 # Apply the default theme
 sns.set_theme()
+
+# Set the random seed for generating a random set of pairs.
+random_seed = 7723
+random.seed(random_seed)
 
 s_and_p_file = s_and_p_directory + os.path.sep + s_and_p_stock_file
 
@@ -342,6 +347,73 @@ class CointData:
         self.weight: float = weight
         self.intercept: float = intercept
         self.stddev: float = 0.0
+
+
+class PairStatisticsBase:
+    def __init__(self, period_close_prices_df: pd.DataFrame) -> None:
+        """
+        :param period_close_prices_df: close prices for an in-sample period
+        """
+        self.close_prices: pd.DataFrame = period_close_prices_df
+        self.decimals = 2
+
+    def pair_regression(self, pair: Tuple) -> Tuple[Tuple[str, str], float, float]:
+        stock_A: str = pair[0]
+        stock_B: str = pair[1]
+        close_a = self.close_prices[stock_A]
+        close_b = self.close_prices[stock_B]
+        close_b_const = sm.add_constant(close_b)
+        # x = I + b * A
+        result_ab = sm.OLS(close_a, close_b_const).fit()
+        close_a_const = sm.add_constant(close_a)
+        # x = I + b * B
+        result_ba = sm.OLS(close_b, close_a_const).fit()
+        slope_ab = result_ab.params[stock_B]
+        slope_ba = result_ba.params[stock_A]
+        result = result_ab
+        slope = slope_ab
+        if slope_ab < slope_ba:
+            t = stock_A
+            stock_A = stock_B
+            stock_B = t
+            result = result_ba
+            slope = slope_ba
+        slope: float = round(slope, self.decimals)
+        intercept: float = round(result.params['const'], self.decimals)
+        ordered_pair: Tuple[str,str] = (stock_A, stock_B)
+        return ordered_pair, slope, intercept
+
+
+class InSamplePairBase:
+    def __init__(self, period_close_prices_df: pd.DataFrame, corr_cutoff: float, num_pairs: int, pair_stats_obj: PairStatisticsBase) -> None:
+        self.close_prices: pd.DataFrame = period_close_prices_df
+        self.corr_cutoff = corr_cutoff
+        self.num_pairs = num_pairs
+        self.pair_stats_obj = pair_stats_obj
+
+class RandomInSamplePairs(InSamplePairBase):
+    def __init__(self, period_close_prices_df: pd.DataFrame, corr_cutoff: float, num_pairs: int) -> None:
+        pair_stats_base = PairStatisticsBase(period_close_prices_df=period_close_prices_df)
+        super().__init__(period_close_prices_df, corr_cutoff, num_pairs, pair_stats_base)
+
+    def unique_random_index(self, set_len: int, set_range: int) -> List[int]:
+        index_set: Set[int] = set()
+        while len(index_set) < set_len:
+            rand_ix = random.randint(0, set_range)
+            if rand_ix not in index_set:
+                index_set.add(rand_ix)
+        return list(index_set)
+
+    def get_in_sample_pairs(self, pairs_list: List[Tuple]) -> List[CointData]:
+        random_index: List[int] = self.unique_random_index(self.num_pairs, len(pairs_list) - 1)
+        # random_pair_list = pairs_list[ random_index ]
+        random_pair_list: List[Tuple] = list(map(lambda ix: pairs_list[ix], random_index))
+        coint_list: List[CointData] = list()
+        for pair in random_pair_list:
+            pair_syms, slope, intercept = self.pair_stats_obj.pair_regression(pair)
+            coint_data = CointData(stock_a=pair_syms[0], stock_b=pair_syms[1], weight=slope, intercept=intercept)
+            coint_list.append(coint_data)
+        return coint_list
 
 
 class PairStatistics:
@@ -410,7 +482,7 @@ class PairStatistics:
                 slope = slope_ba
             slope = round(slope, self.decimals)
             intercept = round(result.params['const'], self.decimals)
-            # A hack that attempts to get rid of outlier pairs. The values for the slop and intercept cutoffs
+            # A hack that attempts to get rid of outlier pairs. The values for the slope and intercept cutoffs
             # were arrived at by looking at the distributions of the data. Still, it's a bit arbitrary.
             if slope <= 6 and abs(intercept) <= 100:
                 residuals = result.resid
