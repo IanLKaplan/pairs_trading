@@ -11,7 +11,34 @@
 #     language: python
 #     name: python3
 # ---
+import ast
 import faulthandler
+import os
+import random
+from abc import abstractmethod
+from datetime import datetime
+from enum import Enum
+from typing import List, Tuple, Dict, Set
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import statsmodels.api as sm
+from iteration_utilities import deepflatten
+from statsmodels.regression.linear_model import RegressionResults
+from statsmodels.tsa.stattools import adfuller
+from tabulate import tabulate
+
+from pairs.pairs import get_pairs
+#
+# Local libraries
+#
+from plot_ts.plot_time_series import plot_two_ts
+from read_market_data.MarketData import MarketData, read_s_and_p_stock_info, extract_sectors
+from s_and_p_filter import s_and_p_directory, s_and_p_stock_file
+from utils import find_date_index
+
 # <h2>
 # Backtesting a Pairs Trading Strategy
 # </h2>
@@ -264,42 +291,12 @@ import faulthandler
 # </ol>
 # <h4>
 #
-
 # +
-
 #
 # To generate a python file from the notebook use jupytext:
 # pip install jupytext --upgrade
 # jupytext --to py pairs_trading_backtest.ipynb
 #
-
-import os
-import random
-from datetime import datetime
-from enum import Enum
-from typing import List, Tuple, Dict, Callable, Set
-
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-import seaborn as sns
-import statsmodels.api as sm
-from dateutil.utils import today
-from statsmodels.tsa.stattools import adfuller
-from tabulate import tabulate
-
-from iteration_utilities import deepflatten
-import ast
-
-from pairs.pairs import get_pairs
-#
-# Local libraries
-#
-from plot_ts.plot_time_series import plot_two_ts, plot_four_ts
-from read_market_data.MarketData import MarketData, read_s_and_p_stock_info, extract_sectors
-
-from s_and_p_filter import s_and_p_directory, s_and_p_stock_file
-from utils import find_date_index
 
 # Apply the default theme
 sns.set_theme()
@@ -348,20 +345,20 @@ class CointData:
         self.intercept: float = intercept
         self.stddev: float = 0.0
 
+    def __str__(self):
+        s = f'{self.key} weight: {self.weight} intercept: {self.intercept} stddev: {self.stddev}'
+        return s
+
 
 class PairStatisticsBase:
-    def __init__(self, period_close_prices_df: pd.DataFrame) -> None:
-        """
-        :param period_close_prices_df: close prices for an in-sample period
-        """
-        self.close_prices: pd.DataFrame = period_close_prices_df
+    def __init__(self) -> None:
         self.decimals = 2
 
-    def pair_regression(self, pair: Tuple) -> Tuple[Tuple[str, str], float, float]:
+    def pair_regression(self, pair: Tuple, close_prices: pd.DataFrame) -> Tuple[Tuple[str, str], float, float, RegressionResults]:
         stock_A: str = pair[0]
         stock_B: str = pair[1]
-        close_a = self.close_prices[stock_A]
-        close_b = self.close_prices[stock_B]
+        close_a = close_prices[stock_A]
+        close_b = close_prices[stock_B]
         close_b_const = sm.add_constant(close_b)
         # x = I + b * A
         result_ab = sm.OLS(close_a, close_b_const).fit()
@@ -381,52 +378,61 @@ class PairStatisticsBase:
         slope: float = round(slope, self.decimals)
         intercept: float = round(result.params['const'], self.decimals)
         ordered_pair: Tuple[str,str] = (stock_A, stock_B)
-        return ordered_pair, slope, intercept
+        return ordered_pair, slope, intercept, result
 
 
 class InSamplePairBase:
-    def __init__(self, period_close_prices_df: pd.DataFrame, corr_cutoff: float, num_pairs: int, pair_stats_obj: PairStatisticsBase) -> None:
-        self.close_prices: pd.DataFrame = period_close_prices_df
+    def __init__(self, corr_cutoff: float, num_pairs: int) -> None:
         self.corr_cutoff = corr_cutoff
         self.num_pairs = num_pairs
-        self.pair_stats_obj = pair_stats_obj
+
+    @classmethod
+    @abstractmethod
+    def get_in_sample_pairs(self, pairs_list: List[Tuple], close_prices: pd.DataFrame) -> List[CointData]:
+        pass
 
 class RandomInSamplePairs(InSamplePairBase):
-    def __init__(self, period_close_prices_df: pd.DataFrame, corr_cutoff: float, num_pairs: int) -> None:
-        pair_stats_base = PairStatisticsBase(period_close_prices_df=period_close_prices_df)
-        super().__init__(period_close_prices_df, corr_cutoff, num_pairs, pair_stats_base)
+    def __init__(self, corr_cutoff: float, num_pairs: int) -> None:
+        super().__init__(corr_cutoff, num_pairs)
 
-    def unique_random_index(self, set_len: int, set_range: int) -> List[int]:
-        index_set: Set[int] = set()
-        while len(index_set) < set_len:
-            rand_ix = random.randint(0, set_range)
-            if rand_ix not in index_set:
-                index_set.add(rand_ix)
-        return list(index_set)
+    def get_random_pairs(self, pairs_list: List[Tuple]):
+        """
+        Choose a set of pairs at random. Make sure that all stocks in the pair set are unique.
+        :param pairs_list:
+        :return:
+        """
+        random_pair_list: List[Tuple] = list()
+        stock_set: Set[str] = set()
+        while len(random_pair_list) < self.num_pairs:
+            rand_ix = random.randint(0, len(pairs_list)-1)
+            rand_pair = pairs_list[rand_ix]
+            stock_A = rand_pair[0]
+            stock_B = rand_pair[1]
+            if stock_A not in stock_set and stock_B not in stock_set:
+                stock_set.add(stock_A)
+                stock_set.add(stock_B)
+                random_pair_list.append(rand_pair)
+        return random_pair_list
 
-    def get_in_sample_pairs(self, pairs_list: List[Tuple]) -> List[CointData]:
-        random_index: List[int] = self.unique_random_index(self.num_pairs, len(pairs_list) - 1)
-        # random_pair_list = pairs_list[ random_index ]
-        random_pair_list: List[Tuple] = list(map(lambda ix: pairs_list[ix], random_index))
+    def get_in_sample_pairs(self, pairs_list: List[Tuple], close_prices: pd.DataFrame) -> List[CointData]:
+        pair_stats_obj = PairStatisticsBase()
+        random_pair_list = self.get_random_pairs(pairs_list=pairs_list)
         coint_list: List[CointData] = list()
         for pair in random_pair_list:
-            pair_syms, slope, intercept = self.pair_stats_obj.pair_regression(pair)
+            pair_syms, slope, intercept, result = pair_stats_obj.pair_regression(pair, close_prices=close_prices)
             coint_data = CointData(stock_a=pair_syms[0], stock_b=pair_syms[1], weight=slope, intercept=intercept)
             coint_list.append(coint_data)
         return coint_list
 
 
-class PairStatistics:
+class PairStatistics(PairStatisticsBase):
 
-    def __init__(self, period_close_prices_df: pd.DataFrame) -> None:
-        """
-        :param period_close_prices_df: close prices for an in-sample period
-        """
-        self.close_prices: pd.DataFrame = period_close_prices_df
-        self.stock_list = self.close_prices.columns
-        self.decimals = 2
+    def __init__(self) -> None:
+        super().__init__()
+        pass
 
-    def pair_correlation(self, pair: Tuple) -> float:
+    def pair_correlation(self, pair: Tuple, close_prices: pd.DataFrame) -> float:
+        stock_list = close_prices.columns
         """
         :param pair: the pair is a Tuple like  ('ALB', 'APD', 'materials') So pair[0] is 'ALB' and pair[1] is 'APD'
         :return: the correlation for the pair in the close price period
@@ -434,9 +440,9 @@ class PairStatistics:
         stock_A: str = pair[0]
         stock_B: str = pair[1]
         correlation: float = -2.0  # bad correlation value
-        if stock_A in self.stock_list and stock_B in self.stock_list:
-            data_a = self.close_prices[stock_A]
-            data_b = self.close_prices[stock_B]
+        if stock_A in stock_list and stock_B in stock_list:
+            data_a = close_prices[stock_A]
+            data_b = close_prices[stock_B]
             c = np.corrcoef(data_a, data_b)
             correlation = round(c[0, 1], 2)
         return correlation
@@ -457,31 +463,13 @@ class PairStatistics:
                 break
         return cointegrated
 
-    def engle_granger_coint(self, pair: Tuple) -> CointData:
+    def engle_granger_coint(self, pair: Tuple, close_prices: pd.DataFrame) -> CointData:
+        stock_list = close_prices.columns
         coint_data = None
-        stock_A: str = pair[0]
-        stock_B: str = pair[1]
-        if stock_A in self.stock_list and stock_B in self.stock_list:
-            close_a = self.close_prices[stock_A]
-            close_b = self.close_prices[stock_B]
-            close_b_const = sm.add_constant(close_b)
-            # x = I + b * A
-            result_ab = sm.OLS(close_a, close_b_const).fit()
-            close_a_const = sm.add_constant(close_a)
-            # x = I + b * B
-            result_ba = sm.OLS(close_b, close_a_const).fit()
-            slope_ab = result_ab.params[stock_B]
-            slope_ba = result_ba.params[stock_A]
-            result = result_ab
-            slope = slope_ab
-            if slope_ab < slope_ba:
-                t = stock_A
-                stock_A = stock_B
-                stock_B = t
-                result = result_ba
-                slope = slope_ba
-            slope = round(slope, self.decimals)
-            intercept = round(result.params['const'], self.decimals)
+        stock_A = pair[0]
+        stock_B = pair[1]
+        if stock_A in stock_list and stock_B in stock_list:
+            pair_syms, slope, intercept, result = self.pair_regression(pair, close_prices=close_prices)
             # A hack that attempts to get rid of outlier pairs. The values for the slope and intercept cutoffs
             # were arrived at by looking at the distributions of the data. Still, it's a bit arbitrary.
             if slope <= 6 and abs(intercept) <= 100:
@@ -491,35 +479,10 @@ class PairStatistics:
                 critical_vals = adf_result[4]
                 cointegrated = self.check_coint(adf_stat, critical_vals)
                 if cointegrated:
-                    coint_data = CointData(stock_a=stock_A, stock_b=stock_B, weight=slope, intercept=intercept)
+                    coint_data = CointData(stock_a=pair_syms[0], stock_b=pair_syms[1], weight=slope, intercept=intercept)
         return coint_data
 
-
-class InSamplePairs:
-
-    def __init__(self, in_sample_close_df: pd.DataFrame, corr_cutoff: float, num_pairs: int) -> None:
-        self.corr_cutoff = corr_cutoff
-        self.in_sample_close_df = in_sample_close_df
-        self.pairs_stats = PairStatistics(self.in_sample_close_df)
-        self.num_pairs = num_pairs
-
-    def select_pairs(self, pairs_list: List[Tuple]) -> List[CointData]:
-        """
-        Select pairs with high correlation and cointegratoin
-        :param pairs_list: a list of pairs
-        :return: a list of CointData for pairs that have a correlation greater than self.corr_cutoff and
-        are cointegrated.
-        """
-        coint_list: List = list()
-        for pair in pairs_list:
-            pair_cor = self.pairs_stats.pair_correlation(pair)
-            if pair_cor >= self.corr_cutoff:
-                coint_data = self.pairs_stats.engle_granger_coint(pair)
-                if coint_data is not None:
-                    coint_list.append(coint_data)
-        return coint_list
-
-    def add_spread_stats(self, coint_data_list: List[CointData]) -> None:
+    def add_spread_stats(self, coint_data_list: List[CointData], close_prices: pd.DataFrame) -> None:
         """
         Add the spread standard deviation to the CointData object
         :param coint_data_list:
@@ -528,11 +491,35 @@ class InSamplePairs:
         for coint_pair in coint_data_list:
             stock_a = coint_pair.stock_a
             stock_b = coint_pair.stock_b
-            close_a = self.in_sample_close_df[stock_a]
-            close_b = self.in_sample_close_df[stock_b]
+            close_a = close_prices[stock_a]
+            close_b = close_prices[stock_b]
             weight = coint_pair.weight
             spread = close_a - coint_pair.intercept - weight * close_b
             coint_pair.stddev = np.std(spread)
+
+
+class InSamplePairs(InSamplePairBase):
+
+    def __init__(self, corr_cutoff: float, num_pairs: int) -> None:
+        super().__init__(corr_cutoff=corr_cutoff, num_pairs=num_pairs)
+        self.pair_stats_obj = PairStatistics()
+
+    def select_pairs(self, pairs_list: List[Tuple], in_sample_close: pd.DataFrame) -> List[CointData]:
+        """
+        Select pairs with high correlation and cointegratoin
+        :param pairs_list: a list of pairs
+        :return: a list of CointData for pairs that have a correlation greater than self.corr_cutoff and
+        are cointegrated.
+        """
+        coint_list: List = list()
+        for pair in pairs_list:
+            pair_cor = self.pair_stats_obj.pair_correlation(pair, close_prices=in_sample_close)
+            if pair_cor >= self.corr_cutoff:
+                coint_data = self.pair_stats_obj.engle_granger_coint(pair, close_prices=in_sample_close)
+                if coint_data is not None:
+                    coint_list.append(coint_data)
+        return coint_list
+
 
     def filter_pairs_list(self, coint_data_list: List[CointData]) -> List[CointData]:
         """
@@ -560,9 +547,9 @@ class InSamplePairs:
                 filtered_pairs.append(max_elem)
         return filtered_pairs
 
-    def get_in_sample_pairs(self, pairs_list: List[Tuple]) -> List[CointData]:
-        coint_data_list: List[CointData] = self.select_pairs(pairs_list)
-        self.add_spread_stats(coint_data_list)
+    def get_in_sample_pairs(self, pairs_list: List[Tuple], close_prices: pd.DataFrame) -> List[CointData]:
+        coint_data_list: List[CointData] = self.select_pairs(pairs_list, in_sample_close=close_prices)
+        self.pair_stats_obj.add_spread_stats(coint_data_list, close_prices=close_prices)
         filtered_list = self.filter_pairs_list(coint_data_list)
         # Sort by declining standard deviation value
         filtered_list.sort(key=lambda elem: elem.stddev, reverse=True)
@@ -606,8 +593,9 @@ num_pairs = 120
 in_sample_start = find_date_index.findDateIndex(close_prices_df.index, start_date)
 in_sample_end = in_sample_start + half_year
 in_sample_df = close_prices_df.iloc[in_sample_start:in_sample_end]
-period_backtest = InSamplePairs(in_sample_close_df=in_sample_df, corr_cutoff=corr_cutoff, num_pairs=num_pairs)
-coint_list = period_backtest.get_in_sample_pairs(pairs_list)
+pairs_stats_obj = PairStatistics()
+period_backtest = InSamplePairs(corr_cutoff=corr_cutoff, num_pairs=num_pairs)
+coint_list = period_backtest.get_in_sample_pairs(pairs_list, close_prices=in_sample_df)
 
 spead_stddev = np.array(list(elem.stddev for elem in coint_list))
 plt.hist(spead_stddev, bins='auto')
@@ -733,7 +721,7 @@ class PairTransaction:
                  pair_return: float,
                  margin: int) -> None:
         """
-        :param pair the pair ticker symbols concatenated as a string. Example: 'HUM:VRTX'
+        :param pair the pair ticker symbols concatenated as a string. Example 'HUM:VRTX'
         :param close_date: the date the transaction was closed
         :param days_open the number of days that the pair position was open
         :param total_profit the profit (or loss) from closing the pair position
@@ -768,11 +756,14 @@ class Position:
                  budget: int):
         """
         spread = stock_A - Weight * Stock_B
+        :param pair_str a string representation of the pair 'FOO:BAR'
+        :param position_type: an enumeration value indicating the position type
+        :param open_date the date the position was opened
         :param price_a: the current price of stock A
         :param price_b: the current price of stock B
-        :param weight: the weighting factor for stock_B
+        :param day_index: the index in the close price series for the current day. Used to calculate days open
         :param budget: the cash that can be allocated for the long/short position
-        :param position_type: an enumeration value indicating the position type
+
         """
         self.pair_str = pair_str
         self.position_type = position_type
@@ -858,24 +849,24 @@ class DailyStats:
 class HistoricalBacktest:
     reg_T_margin_percent = 0.25
 
+    #             in_sample_pairs_obj = InSamplePairs(corr_cutoff=self.corr_cutoff, num_pairs=self.num_pairs)
+
     def __init__(self,
                  pairs_list: List[Tuple],
                  initial_holdings: int,
                  num_pairs: int,
-                 corr_cutoff: float,
                  in_sample_days: int,
                  out_of_sample_days: int,
                  back_window: int,
-                 delta: float) -> None:
+                 delta: float,
+                 in_sample_pairs_obj: InSamplePairBase ) -> None:
         """
         Back test pairs trading through a historical period
         :param pairs_list: the list of possible pairs from the S&P 500. Each Tuple consists of the pair stock
                            symbols and the industry sector. For example: ('AAPL', 'ACN', 'information-technology')
-        :param holdings: The trading capital. Because this is a long-short strategy, this is the amount of cash
+        :param initial_holdings: The trading capital. Because this is a long-short strategy, this is the amount of cash
                          that can be used for the required margin.
         :param num_pairs: the total number of pairs to be traded
-        :param corr_cutoff: the correlation cutoff to be used as the first filter in pairs selection.
-                            For example: 0.75
         :param in_sample_days: the number of days in the in-sample period used to select pairs
         :param out_of_sample_days: the number of days in th out-of-sample trading period
         :param back_window: the look-back window used to calculate the running mean and standard deviation
@@ -885,11 +876,11 @@ class HistoricalBacktest:
         self.pairs_list = pairs_list
         self.initial_holdings = initial_holdings
         self.num_pairs = num_pairs
-        self.corr_cutoff = corr_cutoff
         self.in_sample_days = in_sample_days
         self.out_of_sample_days = out_of_sample_days
         self.back_window = back_window
         self.delta = delta
+        self.in_sample_pairs_obj = in_sample_pairs_obj
 
     def spread_stats(self, pair: CointData,
                      back_win_stock_a: pd.DataFrame,
@@ -1226,8 +1217,7 @@ class HistoricalBacktest:
             print(
                 f'out-of-sample: {out_of_sample_start}:{out_of_sample_end} {out_of_sample_date_start}:{out_of_sample_date_end}')
             in_sample_close_df = pd.DataFrame(close_prices_df.iloc[ix:in_sample_end_ix])
-            in_sample_pairs_obj = InSamplePairs(in_sample_close_df=in_sample_close_df, corr_cutoff=self.corr_cutoff, num_pairs=self.num_pairs)
-            selected_pairs: List[CointData] = in_sample_pairs_obj.get_in_sample_pairs(pairs_list=self.pairs_list)
+            selected_pairs: List[CointData] = self.in_sample_pairs_obj.get_in_sample_pairs(pairs_list=self.pairs_list, close_prices=in_sample_close_df)
             out_of_sample_df = pd.DataFrame(close_prices_df.iloc[out_of_sample_start:out_of_sample_end])
             holdings, day_transactions_df = self.out_of_sample_test(start_ix=self.back_window,
                                                                     out_of_sample_df=out_of_sample_df,
@@ -1278,19 +1268,33 @@ if not os.path.exists(pairs_result_dir):
     os.mkdir(pairs_result_dir)
 if not os.path.exists(pairs_result_path):
     initial_holdings = 100000
+    in_sample_pair_obj = InSamplePairs(corr_cutoff=corr_cutoff, num_pairs=num_pairs)
     historical_backtest = HistoricalBacktest(pairs_list=pairs_list,
                                              initial_holdings=initial_holdings,
                                              num_pairs=num_pairs,
-                                             corr_cutoff=corr_cutoff,
                                              in_sample_days=half_year,
                                              out_of_sample_days=quarter,
                                              back_window=quarter // 3,
-                                             delta=delta)
+                                             delta=delta,
+                                             in_sample_pairs_obj=in_sample_pair_obj)
     all_transactions_df, holdings_df = historical_backtest.historical_backtest(close_prices_df=close_prices_df,
                                                                                start_date=start_date,
                                                                                delta=delta)
     all_transactions_df.to_csv(pairs_result_path)
     holdings_df.to_csv(holdings_path)
+
+    in_sample_random_pair_obj = RandomInSamplePairs(corr_cutoff=corr_cutoff, num_pairs=num_pairs)
+    random_historical_backtest = HistoricalBacktest(pairs_list=pairs_list,
+                                             initial_holdings=initial_holdings,
+                                             num_pairs=num_pairs,
+                                             in_sample_days=half_year,
+                                             out_of_sample_days=quarter,
+                                             back_window=quarter // 3,
+                                             delta=delta,
+                                             in_sample_pairs_obj=in_sample_random_pair_obj)
+    all_rand_transactions_df, rand_holdings_df = random_historical_backtest.historical_backtest(close_prices_df=close_prices_df,
+                                                                               start_date=start_date,
+                                                                               delta=delta)
 else:
     all_transactions_df = pd.read_csv(pairs_result_path, index_col=0)
     holdings_df = pd.read_csv(holdings_path, index_col=0)
