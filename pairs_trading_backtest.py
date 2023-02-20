@@ -395,31 +395,22 @@ class RandomInSamplePairs(InSamplePairBase):
     def __init__(self, corr_cutoff: float, num_pairs: int) -> None:
         super().__init__(corr_cutoff, num_pairs)
 
-    def get_random_pairs(self, pairs_list: List[Tuple]):
-        """
-        Choose a set of pairs at random. Make sure that all stocks in the pair set are unique.
-        :param pairs_list:
-        :return:
-        """
-        random_pair_list: List[Tuple] = list()
-        stock_set: Set[str] = set()
-        while len(random_pair_list) < self.num_pairs:
-            rand_ix = random.randint(0, len(pairs_list)-1)
-            rand_pair = pairs_list[rand_ix]
-            stock_A = rand_pair[0]
-            stock_B = rand_pair[1]
-            if stock_A not in stock_set and stock_B not in stock_set:
-                stock_set.add(stock_A)
-                stock_set.add(stock_B)
-                random_pair_list.append(rand_pair)
-        return random_pair_list
+    def unique_random_index(self, set_len: int, set_range: int) -> List[int]:
+        index_set: Set[int] = set()
+        while len(index_set) < set_len:
+            rand_ix = random.randint(0, set_range)
+            if rand_ix not in index_set:
+                index_set.add(rand_ix)
+        return list(index_set)
 
     def get_in_sample_pairs(self, pairs_list: List[Tuple], close_prices: pd.DataFrame) -> List[CointData]:
         pair_stats_obj = PairStatisticsBase()
-        random_pair_list = self.get_random_pairs(pairs_list=pairs_list)
+        random_index: List[int] = self.unique_random_index(self.num_pairs, len(pairs_list) - 1)
+        # random_pair_list = pairs_list[ random_index ]
+        random_pair_list: List[Tuple] = list(map(lambda ix: pairs_list[ix], random_index))
         coint_list: List[CointData] = list()
         for pair in random_pair_list:
-            pair_syms, slope, intercept, result = pair_stats_obj.pair_regression(pair, close_prices=close_prices)
+            pair_syms, slope, intercept, result = pair_stats_obj.pair_regression(pair, close_prices=close_prices_df)
             coint_data = CointData(stock_a=pair_syms[0], stock_b=pair_syms[1], weight=slope, intercept=intercept)
             coint_list.append(coint_data)
         return coint_list
@@ -521,40 +512,13 @@ class InSamplePairs(InSamplePairBase):
         return coint_list
 
 
-    def filter_pairs_list(self, coint_data_list: List[CointData]) -> List[CointData]:
-        """
-        Filter the pairs list so that the stocks in the list are unique. That is, no stock appears
-        in more than one pair.
-
-        This is done by building a dictionary with the key for stock_a from CointData and
-        a list of the CointData elements that have stock_a. The maximum standard deviation
-        is then used to find the maximum element.
-        :param coint_data_list:
-        :return:
-        """
-        filtered_pairs: List[CointData] = list()
-        pairs_dict: Dict = dict()
-        for pair_info in coint_data_list:
-            stock_key = pair_info.stock_a
-            if stock_key not in pairs_dict:
-                pairs_dict[stock_key] = list()
-            l: List = pairs_dict[stock_key]
-            l.append(pair_info)
-        for key in pairs_dict.keys():
-            l: List = pairs_dict[key]
-            max_elem = max(l, key=lambda elem: elem.stddev)
-            if max_elem is not None:
-                filtered_pairs.append(max_elem)
-        return filtered_pairs
-
     def get_in_sample_pairs(self, pairs_list: List[Tuple], close_prices: pd.DataFrame) -> List[CointData]:
         coint_data_list: List[CointData] = self.select_pairs(pairs_list, in_sample_close=close_prices)
         self.pair_stats_obj.add_spread_stats(coint_data_list, close_prices=close_prices)
-        filtered_list = self.filter_pairs_list(coint_data_list)
         # Sort by declining standard deviation value
-        filtered_list.sort(key=lambda elem: elem.stddev, reverse=True)
-        filtered_list = filtered_list[0:self.num_pairs]
-        return filtered_list
+        coint_data_list.sort(key=lambda elem: elem.stddev, reverse=True)
+        truncated_list = coint_data_list[0:self.num_pairs]
+        return truncated_list
 
 
 def normalize_df(data_df: pd.DataFrame) -> pd.DataFrame:
@@ -588,7 +552,7 @@ def plot_pair_data(close_df: pd.DataFrame, pair: CointData, title_prefix: str) -
 
 
 corr_cutoff = 0.75
-num_pairs = 120
+num_pairs = 100
 
 in_sample_start = find_date_index.findDateIndex(close_prices_df.index, start_date)
 in_sample_end = in_sample_start + half_year
@@ -1260,9 +1224,14 @@ faulthandler.enable()
 
 pairs_result_dir = 'back_test_data'
 pairs_result_file = 'pairs_backtest.csv'
+rand_pairs_result_file = 'rand_pairs_backtest.csv'
 pairs_holdings_file = 'holdings.csv'
+rand_pairs_holdings_file = 'rand_holdings.csv'
 pairs_result_path = pairs_result_dir + os.path.sep + pairs_result_file
 holdings_path = pairs_result_dir + os.path.sep + pairs_holdings_file
+rand_pairs_result_path = pairs_result_dir + os.path.sep + rand_pairs_result_file
+rand_holdings_path = pairs_result_dir + os.path.sep + rand_pairs_holdings_file
+
 
 if not os.path.exists(pairs_result_dir):
     os.mkdir(pairs_result_dir)
@@ -1295,6 +1264,8 @@ if not os.path.exists(pairs_result_path):
     all_rand_transactions_df, rand_holdings_df = random_historical_backtest.historical_backtest(close_prices_df=close_prices_df,
                                                                                start_date=start_date,
                                                                                delta=delta)
+    all_rand_transactions_df.to_csv(rand_pairs_result_path)
+    rand_holdings_df.to_csv(rand_holdings_path)
 else:
     all_transactions_df = pd.read_csv(pairs_result_path, index_col=0)
     holdings_df = pd.read_csv(holdings_path, index_col=0)
