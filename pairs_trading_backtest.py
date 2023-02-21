@@ -1275,11 +1275,28 @@ else:
 
 print(tabulate(holdings_df, headers=[*holdings_df.columns], tablefmt='fancy_grid'))
 
+
+
 transaction_index = all_transactions_df['day_date']
-m_df = pd.DataFrame( all_transactions_df['margin'] )
-m_df.index = transaction_index
-m_df.plot(grid=True, title='Required Margin', figsize=(10, 6))
+m_df = pd.DataFrame(all_transactions_df['margin'].values)
+m_df.index = pd.to_datetime(transaction_index)
+m_df.columns = ['Required Margin']
+h_df = pd.DataFrame(holdings_df.values)
+h_df.index = pd.to_datetime( holdings_df.index)
+h_df.columns = ['Holdings']
+
+fig, ax = plt.subplots(figsize=(10, 8))
+ax.plot(h_df, color='red', label='holdings', linewidth=4)
+ax.set_ylabel('Holdings')
+ax.plot(m_df, color='blue', label='Required Margin', linewidth=1)
+ax.set_ylabel('Dollars')
+plt.legend(loc='upper left')
 plt.show()
+
+
+
+# ax = m_df.plot(grid=True, title='Required Margin', figsize=(10, 6))
+
 
 open_position_count_df = pd.DataFrame( all_transactions_df['num_open_positions'])
 open_position_count_df.index = transaction_index
