@@ -1290,13 +1290,14 @@ def plot_holdings_vs_required_margin(all_transactions_df: pd.DataFrame, initial_
     profit_cumsum = np.cumsum(day_profit_s)
     holdings_df = pd.DataFrame(initial_holdings + profit_cumsum)
     holdings_df.index = index
-    holdings_df.columns = ['Holdings']
+    holdings_df.columns = ['Portfolio']
     fig, ax = plt.subplots(figsize=(10, 8))
     ax.plot(holdings_df, color='red', label='holdings', linewidth=2)
     ax.set_ylabel('Holdings')
     ax.plot(margin_df, color='blue', label='Required Margin', linewidth=1)
     ax.set_ylabel('Dollars')
     plt.legend(loc='upper left')
+    plt.title('Required Margin and Portfolio Balance')
 
 
 plot_holdings_vs_required_margin(all_transactions_df, initial_holdings=initial_holdings)
@@ -1328,26 +1329,31 @@ def plot_return_distribution(all_transactions_df: pd.DataFrame, sigma_lim: float
 plot_return_distribution(all_transactions_df, sigma_lim=4)
 plt.show()
 
-open_position_count_df = pd.DataFrame( all_transactions_df['num_open_positions'])
-open_position_count_df.index = pd.to_datetime(all_transactions_df.index)
-open_position_count_df.plot(grid=True, title='Open Positions', figsize=(10, 6))
+def plot_open_positions(all_transactions_df: pd.DataFrame) -> None:
+    open_position_count_df = pd.DataFrame( all_transactions_df['num_open_positions'])
+    open_position_count_df.index = pd.to_datetime(all_transactions_df['day_date'])
+    open_position_count_df.columns = ['Open Positions']
+    open_position_count_df.plot(grid=True, title='Open Positions', figsize=(10, 6))
+
+
+plot_open_positions(all_transactions_df)
 plt.show()
 
-days_open_l = list(all_transactions_df['days_open'])
-# When the all_transactions_df DataFrame is built from the back test code it contains a list of lists
-# for the days_open: [[6, 3, 3], [5], [8, 6, 7], [10, 5, 10, 5, 2, 9]] When the DataFrame is read from
-# a file it contains a list of strings for the lists: ['[6, 3, 3]', '[5]', '[8, 6, 7]', '[10, 5, 10, 5, 2, 9]']
-# If it is a list of string, the string need to be converted to lists. This is done via the ast.literal_eval
-# function.
-if type(days_open_l[0]) == str:
-    days_open_l = list(map(ast.literal_eval, days_open_l))
-days_open = list(deepflatten(days_open_l))
+def plot_days_open(all_transactions_df: pd.DataFrame) -> None:
+    days_open_l = list(all_transactions_df['days_open'])
+    # When the all_transactions_df DataFrame is built from the back test code it contains a list of lists
+    # for the days_open: [[6, 3, 3], [5], [8, 6, 7], [10, 5, 10, 5, 2, 9]] When the DataFrame is read from
+    # a file it contains a list of strings for the lists: ['[6, 3, 3]', '[5]', '[8, 6, 7]', '[10, 5, 10, 5, 2, 9]']
+    # If it is a list of string, the string need to be converted to lists. This is done via the ast.literal_eval
+    # function.
+    if type(days_open_l[0]) == str:
+        days_open_l = list(map(ast.literal_eval, days_open_l))
+    days_open = list(deepflatten(days_open_l))
+    plt.hist(days_open, bins='auto')
+    plt.title('Number of days a pair trade is open')
+    plt.show()
 
-plt.hist(days_open, bins='auto')
-plt.title('Number of days a pair trade is open')
-plt.show()
 
-
-returns_df = all_transactions_df['day_return']
+plot_days_open(all_transactions_df)
 
 pass
