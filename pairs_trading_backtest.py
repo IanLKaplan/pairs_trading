@@ -920,7 +920,9 @@ class HistoricalBacktest:
                 short_share_price = position.price_b
                 close_long = long_shares * price_a
                 close_short = short_shares * price_b
+            # short_position - the position when the short was opened
             short_position = short_shares * short_share_price
+            # long_position - the position when the long was opened
             long_position = long_shares * long_share_price
             # Example: open short at 20/share and 80 shares for a total of 1600
             #          close short at 15 and 80 shares for a total of 1200
@@ -1233,10 +1235,11 @@ rand_pairs_result_path = pairs_result_dir + os.path.sep + rand_pairs_result_file
 rand_holdings_path = pairs_result_dir + os.path.sep + rand_pairs_holdings_file
 
 
+initial_holdings = 100000
+
 if not os.path.exists(pairs_result_dir):
     os.mkdir(pairs_result_dir)
 if not os.path.exists(pairs_result_path):
-    initial_holdings = 100000
     in_sample_pair_obj = InSamplePairs(corr_cutoff=corr_cutoff, num_pairs=num_pairs)
     historical_backtest = HistoricalBacktest(pairs_list=pairs_list,
                                              initial_holdings=initial_holdings,
@@ -1270,36 +1273,63 @@ else:
     all_transactions_df = pd.read_csv(pairs_result_path, index_col=0)
     holdings_df = pd.read_csv(holdings_path, index_col=0)
 
+# all_transactions_df has the following columns:
 # 'day_date', 'positive_trades', 'negative_trades', 'days_open',
 #        'day_profit', 'day_return', 'num_open_positions', 'margin'
 
 print(tabulate(holdings_df, headers=[*holdings_df.columns], tablefmt='fancy_grid'))
 
 
+def plot_holdings_vs_required_margin(all_transactions_df: pd.DataFrame, initial_holdings: float) -> None:
+    transaction_index = all_transactions_df['day_date']
+    margin_df = pd.DataFrame(all_transactions_df['margin'].values)
+    index = margin_df.index = pd.to_datetime(transaction_index)
+    margin_df.index = index
+    margin_df.columns = ['Required Margin']
+    day_profit_s = all_transactions_df['day_profit']
+    profit_cumsum = np.cumsum(day_profit_s)
+    holdings_df = pd.DataFrame(initial_holdings + profit_cumsum)
+    holdings_df.index = index
+    holdings_df.columns = ['Holdings']
+    fig, ax = plt.subplots(figsize=(10, 8))
+    ax.plot(holdings_df, color='red', label='holdings', linewidth=2)
+    ax.set_ylabel('Holdings')
+    ax.plot(margin_df, color='blue', label='Required Margin', linewidth=1)
+    ax.set_ylabel('Dollars')
+    plt.legend(loc='upper left')
 
-transaction_index = all_transactions_df['day_date']
-m_df = pd.DataFrame(all_transactions_df['margin'].values)
-m_df.index = pd.to_datetime(transaction_index)
-m_df.columns = ['Required Margin']
-h_df = pd.DataFrame(holdings_df.values)
-h_df.index = pd.to_datetime( holdings_df.index)
-h_df.columns = ['Holdings']
 
-fig, ax = plt.subplots(figsize=(10, 8))
-ax.plot(h_df, color='red', label='holdings', linewidth=4)
-ax.set_ylabel('Holdings')
-ax.plot(m_df, color='blue', label='Required Margin', linewidth=1)
-ax.set_ylabel('Dollars')
-plt.legend(loc='upper left')
+plot_holdings_vs_required_margin(all_transactions_df, initial_holdings=initial_holdings)
 plt.show()
 
+def clip_distribution(dist_vals: pd.Series, sigma_lim: float) -> pd.Series:
+    """
+    Clip a distribution at mean +/-sigma_lim * sigma where sigma is the standard deviation.
+    :param dist_vals:
+    :param sigma_lim:
+    :return: the clipped distribution
+    """
+    dist_mean = dist_vals.mean()
+    dist_stddev = dist_vals.std()
+    filter = list(
+        map(lambda val: val >= dist_mean - (sigma_lim * dist_stddev) and val <= dist_mean + (sigma_lim * dist_stddev), dist_vals))
+    filtered_vals = dist_vals[filter]
+    return filtered_vals
 
 
-# ax = m_df.plot(grid=True, title='Required Margin', figsize=(10, 6))
+def plot_return_distribution(all_transactions_df: pd.DataFrame, sigma_lim: float) -> None:
+    day_returns = all_transactions_df['day_return']
+    filtered_returns = clip_distribution(day_returns, sigma_lim=sigma_lim)
+    plt.hist(filtered_returns, bins='auto')
+    plt.title('Distribution of Daily Returns')
+    plt.axvline(x=filtered_returns.mean(), color='red', linewidth=2)
 
+
+plot_return_distribution(all_transactions_df, sigma_lim=4)
+plt.show()
 
 open_position_count_df = pd.DataFrame( all_transactions_df['num_open_positions'])
-open_position_count_df.index = transaction_index
+open_position_count_df.index = pd.to_datetime(all_transactions_df.index)
 open_position_count_df.plot(grid=True, title='Open Positions', figsize=(10, 6))
 plt.show()
 
