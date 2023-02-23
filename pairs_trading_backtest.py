@@ -1356,4 +1356,7 @@ def plot_days_open(all_transactions_df: pd.DataFrame) -> None:
 
 plot_days_open(all_transactions_df)
 
+spy_close_df = market_data.read_data('SPY')
+spy_close_df = pd.DataFrame(spy_close_df[spy_close_df.columns[0]])
+
 pass
