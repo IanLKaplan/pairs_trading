@@ -16,7 +16,7 @@ import faulthandler
 import os
 import random
 from abc import abstractmethod
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import List, Tuple, Dict, Set
 
@@ -38,6 +38,7 @@ from plot_ts.plot_time_series import plot_two_ts
 from read_market_data.MarketData import MarketData, read_s_and_p_stock_info, extract_sectors
 from s_and_p_filter import s_and_p_directory, s_and_p_stock_file
 from utils import find_date_index
+from utils.find_date_index import findDateIndex
 
 # <h2>
 # Backtesting a Pairs Trading Strategy
@@ -317,12 +318,22 @@ quarter = int(trading_days / 4)
 
 stock_info_df = read_s_and_p_stock_info(s_and_p_file)
 stock_l: list = list(set(stock_info_df['Symbol']))
-stock_l.sort()
 market_data = MarketData(start_date=start_date)
 
-# Get close prices for the S&P 500 list
+# Get close prices for the S&P 500 list and SPY
+stock_l.append('SPY')
+stock_l.sort()
 close_prices_df = market_data.get_close_data(stock_l)
+
+# Get the SPY close data
+spy_close_df = pd.DataFrame(close_prices_df['SPY'])
+spy_close_df.columns = ['SPY']
+close_prices_df = close_prices_df.drop(columns=['SPY'])
+
 final_stock_list = list(close_prices_df.columns)
+
+# Make sure that SPY is not on the pairs set
+assert not 'SPY' in set(final_stock_list)
 
 mask = stock_info_df['Symbol'].isin(final_stock_list)
 # Some stocks were listed on the stock exchange later than start_date. In this case the stock will not
@@ -1201,14 +1212,16 @@ class HistoricalBacktest:
 
 
 class ReturnCalculation:
-    def simple_return(self, time_series: np.array, period: int = 1) -> List:
-        return list(((time_series[i] / time_series[i - period]) - 1.0 for i in range(period, len(time_series), period)))
+    def simple_return(self, time_series: np.array) -> np.array:
+        l = len(time_series)
+        r: np.array = (time_series[1:] / time_series[0:(l-1)]) - 1
+        return r
 
-    def return_df(self, time_series_df: pd.DataFrame) -> pd.DataFrame:
+    def calc_return_df(self, time_series_df: pd.DataFrame) -> pd.DataFrame:
         r_df: pd.DataFrame = pd.DataFrame()
         time_series_a: np.array = time_series_df.values
-        return_l = self.simple_return(time_series_a, 1)
-        r_df = pd.DataFrame(return_l)
+        return_a = self.simple_return(time_series_a)
+        r_df = pd.DataFrame(return_a)
         date_index = time_series_df.index
         r_df.index = date_index[1:len(date_index)]
         r_df.columns = time_series_df.columns
@@ -1219,8 +1232,10 @@ class ReturnCalculation:
         port_a[0] = start_val
         return_a = return_df.values
         for i in range(1, len(port_a)):
-            port_a[i] = port_a[i - 1] + port_a[i - 1] * return_a[i - 1]
+            port_a[i] = port_a[i - 1] * (1.0 + return_a[i - 1])
+            # port_a[i] = port_a[i - 1] + (port_a[i - 1] * return_a[i - 1])
         return port_a
+
 
 faulthandler.enable()
 
@@ -1356,7 +1371,39 @@ def plot_days_open(all_transactions_df: pd.DataFrame) -> None:
 
 plot_days_open(all_transactions_df)
 
-spy_close_df = market_data.read_data('SPY')
-spy_close_df = pd.DataFrame(spy_close_df[spy_close_df.columns[0]])
+
+transaction_dates = all_transactions_df['day_date']
+trans_first_date = pd.to_datetime(transaction_dates.iloc[1])
+trans_last_date = pd.to_datetime(transaction_dates.iloc[-1])
+spy_date_index = spy_close_df.index
+
+spy_start_ix = findDateIndex(spy_date_index, trans_first_date)
+spy_end_ix = findDateIndex(spy_date_index, trans_last_date)
+
+spy_close_period_df = spy_close_df.iloc[spy_start_ix:spy_end_ix+1]
+
+return_calculation = ReturnCalculation()
+
+spy_return_df = return_calculation.calc_return_df(spy_close_period_df)
+transaction_return_df = all_transactions_df['day_return']
+transaction_return_index = pd.to_datetime(transaction_dates.values)
+transaction_return_df.index = transaction_return_index
+
+transaction_return_df.plot(grid=True, title='Returns', figsize=(10, 6))
+plt.show()
+
+return_sec = pd.DataFrame(transaction_return_df[3500:])
+test_ret = return_calculation.apply_return(initial_holdings, return_sec)
+
+portfolio_df = pd.DataFrame(return_calculation.apply_return(initial_holdings, transaction_return_df))
+day_start = transaction_return_index[0] - timedelta(days=1)
+portfolio_df_index_l = list(transaction_return_index)
+portfolio_df_index_l.insert(0, day_start)
+portfolio_df.index = portfolio_df_index_l
+portfolio_df.columns = ['Portfolio']
+
+spy_portfolio_df = pd.DataFrame(return_calculation.apply_return(initial_holdings, spy_return_df))
+spy_portfolio_df.index = spy_date_index[spy_start_ix+1:spy_end_ix+1]
+
 
 pass
