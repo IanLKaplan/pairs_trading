@@ -961,8 +961,9 @@ class HistoricalBacktest:
             #   ret_long = 0.03
             #   R_portfolio = w1 * R_long + w2 * R_short where w1 = w2 = 0.5
             #   total = 0.5 x 0.02 + 0.5 x 0.03 = 0.025
-            weight_short = 0.5
-            weight_long = 0.5
+            total_position = long_position + short_position
+            weight_short = short_position / total_position
+            weight_long = long_position / total_position
             total_return = round((weight_short * ret_short) + (weight_long * ret_long), 4)
             days_open = (day_index - position.day_index) + 1
             transaction = PairTransaction(pair=position.pair_str,
@@ -991,11 +992,21 @@ class HistoricalBacktest:
                                  transaction_l: List[PairTransaction],
                                  open_positions: Dict[str, Position],
                                  holdings: int) -> Tuple[int, DayTransactions]:
+        """
+        Process the transactions for one day. The return is calculated as a portfolio return.
+        The portfolio weight is 1/self.num_pairs. This is the number of possible pairs that could
+        be traded.
+        :param day_date:
+        :param transaction_l:
+        :param open_positions:
+        :param holdings:
+        :return:
+        """
         cur_holdings: int = holdings
         day_transactions = None
         num_trades = len(transaction_l)
         if num_trades > 0:
-            port_weight = 1.0 / num_trades
+            port_weight = 1.0 / self.num_pairs
             open_days_l: List[int] = list()
             day_return = 0.0
             day_profit = 0.0
@@ -1295,6 +1306,24 @@ else:
 print(tabulate(holdings_df, headers=[*holdings_df.columns], tablefmt='fancy_grid'))
 
 
+def plot_two_dataframes(one_df: pd.DataFrame,
+                        two_df: pd.DataFrame,
+                        colors: List[str],
+                        label_one: str,
+                        label_two: str,
+                        x_label: str,
+                        y_label: str,
+                        title: str) -> None:
+    fig, ax = plt.subplots(figsize=(10, 8))
+    ax.plot(one_df, color=colors[0], label=label_one, linewidth=1)
+    ax.plot(two_df, color=colors[1], label=label_two, linewidth=1)
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    plt.legend(loc='upper left')
+    plt.title(title)
+    plt.show()
+
+
 def plot_holdings_vs_required_margin(all_transactions_df: pd.DataFrame, initial_holdings: float) -> None:
     transaction_index = all_transactions_df['day_date']
     margin_df = pd.DataFrame(all_transactions_df['margin'].values)
@@ -1306,13 +1335,14 @@ def plot_holdings_vs_required_margin(all_transactions_df: pd.DataFrame, initial_
     holdings_df = pd.DataFrame(initial_holdings + profit_cumsum)
     holdings_df.index = index
     holdings_df.columns = ['Portfolio']
-    fig, ax = plt.subplots(figsize=(10, 8))
-    ax.plot(holdings_df, color='red', label='holdings', linewidth=2)
-    ax.set_ylabel('Holdings')
-    ax.plot(margin_df, color='blue', label='Required Margin', linewidth=1)
-    ax.set_ylabel('Dollars')
-    plt.legend(loc='upper left')
-    plt.title('Required Margin and Portfolio Balance')
+    plot_two_dataframes(one_df=holdings_df,
+                        two_df=margin_df,
+                        colors=['red', 'blue'],
+                        label_one='cash',
+                        label_two='Required Margin',
+                        x_label='Date',
+                        y_label='Dollars',
+                        title='Required Margin and Portfolio Balance')
 
 
 plot_holdings_vs_required_margin(all_transactions_df, initial_holdings=initial_holdings)
@@ -1371,29 +1401,18 @@ def plot_days_open(all_transactions_df: pd.DataFrame) -> None:
 
 plot_days_open(all_transactions_df)
 
-
 transaction_dates = all_transactions_df['day_date']
-trans_first_date = pd.to_datetime(transaction_dates.iloc[1])
-trans_last_date = pd.to_datetime(transaction_dates.iloc[-1])
-spy_date_index = spy_close_df.index
-
-spy_start_ix = findDateIndex(spy_date_index, trans_first_date)
-spy_end_ix = findDateIndex(spy_date_index, trans_last_date)
-
-spy_close_period_df = spy_close_df.iloc[spy_start_ix:spy_end_ix+1]
+trans_first_date = pd.to_datetime(transaction_dates.iloc[0])
+trans_end_date = pd.to_datetime(transaction_dates.iloc[-1])
 
 return_calculation = ReturnCalculation()
 
-spy_return_df = return_calculation.calc_return_df(spy_close_period_df)
 transaction_return_df = all_transactions_df['day_return']
 transaction_return_index = pd.to_datetime(transaction_dates.values)
 transaction_return_df.index = transaction_return_index
 
-transaction_return_df.plot(grid=True, title='Returns', figsize=(10, 6))
+transaction_return_df.plot(grid=True, title='Pairs Trading Returns', figsize=(10, 6))
 plt.show()
-
-return_sec = pd.DataFrame(transaction_return_df[3500:])
-test_ret = return_calculation.apply_return(initial_holdings, return_sec)
 
 portfolio_df = pd.DataFrame(return_calculation.apply_return(initial_holdings, transaction_return_df))
 day_start = transaction_return_index[0] - timedelta(days=1)
@@ -1402,8 +1421,23 @@ portfolio_df_index_l.insert(0, day_start)
 portfolio_df.index = portfolio_df_index_l
 portfolio_df.columns = ['Portfolio']
 
-spy_portfolio_df = pd.DataFrame(return_calculation.apply_return(initial_holdings, spy_return_df))
-spy_portfolio_df.index = spy_date_index[spy_start_ix+1:spy_end_ix+1]
+spy_date_index = spy_close_df.index
+spy_start_ix = findDateIndex(spy_date_index, trans_first_date)
+spy_end_ix = findDateIndex(spy_date_index, trans_end_date)
 
+spy_close_period_df = spy_close_df.iloc[spy_start_ix:spy_end_ix+1]
+spy_return_df = return_calculation.calc_return_df(spy_close_period_df)
+spy_portfolio_df = pd.DataFrame(return_calculation.apply_return(initial_holdings, spy_return_df))
+spy_return_index = spy_return_df.index
+spy_return_start_date = pd.to_datetime(spy_return_index[0])
+spy_return_end_date = pd.to_datetime(spy_return_index[-1])
+spy_start_ix = findDateIndex(spy_date_index, spy_return_start_date)
+spy_end_ix = findDateIndex(spy_date_index, spy_return_end_date)
+spy_portfolio_df.index = pd.to_datetime(spy_date_index[spy_start_ix-1:spy_end_ix+1])
+spy_portfolio_df.columns = ['SPY']
+
+plot_two_dataframes(one_df=spy_portfolio_df, two_df=portfolio_df, colors=['blue', 'orange'], label_one='SPY Portfolio',
+                    label_two='Pairs Portfolio', x_label='Date', y_label='Portfolio Value',
+                    title='Pairs and SPY Portfolio')
 
 pass
