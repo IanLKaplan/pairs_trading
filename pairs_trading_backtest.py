@@ -39,6 +39,7 @@ from plot_ts.plot_time_series import plot_two_ts
 from read_market_data.MarketData import MarketData, read_s_and_p_stock_info, extract_sectors
 from s_and_p_filter import s_and_p_directory, s_and_p_stock_file
 from utils import find_date_index
+from utils.convert_date import convert_date
 from utils.find_date_index import findDateIndex
 
 # <h2>
@@ -310,7 +311,7 @@ random.seed(random_seed)
 s_and_p_file = s_and_p_directory + os.path.sep + s_and_p_stock_file
 
 start_date_str = '2007-01-03'
-# start_date_str = '2020-01-03'
+# start_date_str = '2018-01-03'
 start_date: datetime = datetime.fromisoformat(start_date_str)
 
 trading_days = 252
@@ -835,6 +836,7 @@ class HistoricalBacktest:
                  out_of_sample_days: int,
                  back_window: int,
                  delta: float,
+                 day_limit: int,
                  in_sample_pairs_obj: InSamplePairBase ) -> None:
         """
         Back test pairs trading through a historical period
@@ -856,6 +858,7 @@ class HistoricalBacktest:
         self.out_of_sample_days = out_of_sample_days
         self.back_window = back_window
         self.delta = delta
+        self.day_limit = day_limit
         self.in_sample_pairs_obj = in_sample_pairs_obj
 
     def spread_stats(self, pair: CointData,
@@ -1155,7 +1158,7 @@ class HistoricalBacktest:
                                          day_index=row_ix,
                                          daily_transactions=daily_transactions,
                                          open_positions=open_positions)
-                else:  # Possibly open a position depending on the spread
+                elif start_ix < end_ix - self.day_limit:  # Possibly open a position depending on the spread
                     self.open_position(day_stats,
                                        current_date=row_date,
                                        day_index=row_ix,
@@ -1262,6 +1265,7 @@ rand_pairs_result_path = pairs_result_dir + os.path.sep + rand_pairs_result_file
 rand_holdings_path = pairs_result_dir + os.path.sep + rand_pairs_holdings_file
 
 
+day_limit = 15
 initial_holdings = 100000
 
 if not os.path.exists(pairs_result_dir):
@@ -1275,6 +1279,7 @@ if not os.path.exists(pairs_result_path):
                                              out_of_sample_days=quarter,
                                              back_window=quarter // 3,
                                              delta=delta,
+                                             day_limit=day_limit,
                                              in_sample_pairs_obj=in_sample_pair_obj)
     all_transactions_df, holdings_df = historical_backtest.historical_backtest(close_prices_df=close_prices_df,
                                                                                start_date=start_date,
@@ -1290,6 +1295,7 @@ if not os.path.exists(pairs_result_path):
                                              out_of_sample_days=quarter,
                                              back_window=quarter // 3,
                                              delta=delta,
+                                             day_limit=day_limit,
                                              in_sample_pairs_obj=in_sample_random_pair_obj)
     all_rand_transactions_df, rand_holdings_df = random_historical_backtest.historical_backtest(close_prices_df=close_prices_df,
                                                                                start_date=start_date,
@@ -1479,6 +1485,41 @@ profit_portfolio_df = day_profit_portfolio(all_transactions_df=all_transactions_
 plot_two_dataframes(one_df=spy_portfolio_df, two_df=profit_portfolio_df, colors=['blue', 'orange'], label_one='SPY Portfolio',
                     label_two='Pairs Portfolio', x_label='Date', y_label='Portfolio Value',
                     title='Pairs Portfolio and SPY Portfolio')
+
+def yearly_return(portfolio_df: pd.DataFrame) -> pd.DataFrame:
+    first_row = True
+    year_list = list()
+    return_list = list()
+    year_last_value = 0
+    year_start_value = 0
+    current_year = None
+    for row_date, row_val in portfolio_df.iterrows():
+        row_date = convert_date(row_date)
+        row_val = row_val.values[0]
+        if first_row:
+            current_year = row_date.year
+            year_start_value = row_val
+            first_row = False
+        elif row_date.year == current_year:
+            year_last_value = row_val
+        elif row_date.year != current_year:
+            year_list.append(current_year)
+            year_return = round(((year_last_value / year_start_value) - 1) * 100, 2)
+            return_list.append(year_return)
+            current_year = row_date.year
+            year_start_value = row_val
+    year_return_df = pd.DataFrame(return_list)
+    year_return_df.index = year_list
+    year_return_df.columns = portfolio_df.columns
+    return year_return_df
+
+
+
+portfolio_yearly_return_df = yearly_return(profit_portfolio_df)
+spy_yearly_return_df = yearly_return(spy_portfolio_df)
+portfolio_returns_df = pd.concat([portfolio_yearly_return_df, spy_yearly_return_df], axis=1)
+print(tabulate(portfolio_returns_df, headers=[*portfolio_returns_df.columns], tablefmt='fancy_grid'))
+
 
 return_calculation = ReturnCalculation()
 profit_portfolio_return = return_calculation.calc_return_df(profit_portfolio_df)
