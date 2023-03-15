@@ -641,6 +641,34 @@ plot_mean_spread(pair=pair, close_prices_df=close_prices_df, start_ix=window_out
 plt.show()
 
 
+def pairs_stock_distrubtion(coint_pairs: List[CointData]) -> List[int]:
+
+    def incr_stock_count(sym: str, map: Dict[str, int]) -> None:
+        count: int = 0
+        if sym in map:
+            count = map[sym]
+        count += 1
+        map[sym] = count
+
+    pairs_map: Dict[str, int] = dict()
+    for pair_info in coint_pairs:
+        count: int = 0
+        incr_stock_count(pair_info.stock_a, pairs_map)
+        incr_stock_count(pair_info.stock_b, pairs_map)
+    dist_list: List[int] = pairs_map.values()
+    return dist_list
+
+
+
+dist_list = pairs_stock_distrubtion(coint_pairs=coint_list)
+
+plt.hist(dist_list, bins='auto')
+plt.title('Number of Pairs per Stock')
+plt.xlabel('Stocks per Pair')
+plt.ylabel('Number of Pairs')
+plt.show()
+
+
 class OpenPosition(Enum):
     NOT_OPEN = 1
     SHORT_A_LONG_B = 2
@@ -1304,26 +1332,22 @@ if not os.path.exists(pairs_result_path):
     rand_holdings_df.to_csv(rand_holdings_path)
 else:
     all_transactions_df = pd.read_csv(pairs_result_path, index_col=0)
+    all_rand_transactions_df = pd.read_csv(rand_pairs_result_path, index_col=0)
     holdings_df = pd.read_csv(holdings_path, index_col=0)
+
 
 # all_transactions_df has the following columns:
 # 'day_date', 'positive_trades', 'negative_trades', 'days_open',
 #        'day_profit', 'day_return', 'num_open_positions', 'margin'
 
-print(tabulate(holdings_df, headers=[*holdings_df.columns], tablefmt='fancy_grid'))
+# print(tabulate(holdings_df, headers=[*holdings_df.columns], tablefmt='fancy_grid'))
 
-
-def plot_two_dataframes(one_df: pd.DataFrame,
-                        two_df: pd.DataFrame,
-                        colors: List[str],
-                        label_one: str,
-                        label_two: str,
-                        x_label: str,
-                        y_label: str,
-                        title: str) -> None:
-    fig, ax = plt.subplots(figsize=(10, 8))
-    ax.plot(one_df, color=colors[0], label=label_one, linewidth=1)
-    ax.plot(two_df, color=colors[1], label=label_two, linewidth=1)
+def plot_dataframes(df_list: List[pd.DataFrame], colors: List[str], labels: List[str], x_label: str, y_label: str, title: str) -> None:
+    ig, ax = plt.subplots(figsize=(10, 8))
+    for ix, df in enumerate(df_list):
+        color = colors[ix]
+        label = labels[ix]
+        ax.plot(df, color=color, label=label, linewidth=1)
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     plt.legend(loc='upper left')
@@ -1332,6 +1356,14 @@ def plot_two_dataframes(one_df: pd.DataFrame,
 
 
 def day_profit_portfolio(all_transactions_df: pd.DataFrame, initial_holdings: float) -> pd.DataFrame:
+    """
+    Calculate the cumulative sum of the daily profit or loss. This sum is added to the initial
+    holdings amount to show how the value would grow over time.
+
+    :param all_transactions_df: a DataFrame with the daily data from the pairs trading simulation.
+    :param initial_holdings: the initial investment
+    :return: a DataFrame containing the time series showing the cumulative change from pairs trading.
+    """
     day_profit_s = all_transactions_df['day_profit']
     profit_cumsum = np.cumsum(day_profit_s)
     portfolio_df = pd.DataFrame(initial_holdings + profit_cumsum)
@@ -1343,6 +1375,10 @@ def day_profit_portfolio(all_transactions_df: pd.DataFrame, initial_holdings: fl
 
 
 def required_margin(all_transactions: pd.DataFrame) -> pd.DataFrame:
+    """
+    :param all_transactions: a DataFrame with the daily data from the pairs trading simulation.
+    :return: the required margin for trading.
+    """
     transaction_index = all_transactions_df['day_date']
     margin_df = pd.DataFrame(all_transactions_df['margin'].values)
     index = pd.to_datetime(transaction_index)
@@ -1352,13 +1388,18 @@ def required_margin(all_transactions: pd.DataFrame) -> pd.DataFrame:
 
 
 def plot_holdings_vs_required_margin(all_transactions_df: pd.DataFrame, initial_holdings: float) -> None:
+    """
+    Plot the required margin vs. the current margin holdings. This starts with initial_holdings and changes
+    with the pairs trading profit and loss.
+    :param all_transactions_df: a DataFrame with the daily data from the pairs trading simulation.
+    :param initial_holdings: the initial investment which is used for the margin.
+    :return: None
+    """
     portfolio_df = day_profit_portfolio(all_transactions_df, initial_holdings)
     margin_df = required_margin(all_transactions_df)
-    plot_two_dataframes(one_df=portfolio_df,
-                        two_df=margin_df,
+    plot_dataframes(df_list=[portfolio_df, margin_df],
                         colors=['red', 'blue'],
-                        label_one='cash',
-                        label_two='Required Margin',
+                        labels=['cash','Required Margin'],
                         x_label='Date',
                         y_label='Dollars',
                         title='Required Margin and Portfolio Balance')
@@ -1383,6 +1424,13 @@ def clip_distribution(dist_vals: pd.Series, sigma_lim: float) -> pd.Series:
 
 
 def plot_return_distribution(all_transactions_df: pd.DataFrame, sigma_lim: float) -> None:
+    """
+    Plot the distribution of the daily returns from pairs trading.  The return distribution
+    is the return for each day.
+    :param all_transactions_df:
+    :param sigma_lim:
+    :return:
+    """
     day_returns = all_transactions_df['day_return']
     filtered_returns = clip_distribution(day_returns, sigma_lim=sigma_lim)
     plt.hist(filtered_returns, bins='auto')
@@ -1392,6 +1440,12 @@ def plot_return_distribution(all_transactions_df: pd.DataFrame, sigma_lim: float
 
 
 def plot_cash_distribution(all_transactions_df: pd.DataFrame, sigma_lim: float) -> None:
+    """
+    Plot the distribution of the daily profit and loss.
+    :param all_transactions_df:
+    :param sigma_lim:
+    :return:
+    """
     daily_cash = all_transactions_df['day_profit']
     filtered_daily_cash = clip_distribution(daily_cash, sigma_lim)
     plt.hist(filtered_daily_cash)
@@ -1405,16 +1459,26 @@ plot_return_distribution(all_transactions_df, sigma_lim=4)
 plot_cash_distribution(all_transactions_df, sigma_lim=2)
 
 def plot_open_positions(all_transactions_df: pd.DataFrame) -> None:
+    """
+    Plot the number of open positions per day
+    :param all_transactions_df:
+    :return:
+    """
     open_position_count_df = pd.DataFrame( all_transactions_df['num_open_positions'])
     open_position_count_df.index = pd.to_datetime(all_transactions_df['day_date'])
     open_position_count_df.columns = ['Open Positions']
     open_position_count_df.plot(grid=True, title='Open Positions', figsize=(10, 6))
+    plt.show()
 
 
 plot_open_positions(all_transactions_df)
-plt.show()
 
 def plot_days_open(all_transactions_df: pd.DataFrame) -> None:
+    """
+    Plot the number of days a position is open.
+    :param all_transactions_df:
+    :return:
+    """
     days_open_l = list(all_transactions_df['days_open'])
     # When the all_transactions_df DataFrame is built from the back test code it contains a list of lists
     # for the days_open: [[6, 3, 3], [5], [8, 6, 7], [10, 5, 10, 5, 2, 9]] When the DataFrame is read from
@@ -1433,6 +1497,14 @@ plot_days_open(all_transactions_df)
 
 
 def spy_portfolio_period(spy_close_df: pd.DataFrame, start_date: datetime, end_date: datetime, initial_holdings: float) -> pd.DataFrame:
+    """
+    Calculate a portfolio based on SPY return, from start_date to end_date relative to an initial investment
+    :param spy_close_df: The SPY close price time series.
+    :param start_date: period start date
+    :param end_date: period end date
+    :param initial_holdings: the initial investment
+    :return: a DataFrame containing the SPY time series relative to the initial investment.
+    """
     spy_date_index = spy_close_df.index
     spy_start_ix = findDateIndex(spy_date_index, start_date)
     spy_end_ix = findDateIndex(spy_date_index, end_date)
@@ -1449,7 +1521,14 @@ def spy_portfolio_period(spy_close_df: pd.DataFrame, start_date: datetime, end_d
     spy_portfolio_df.columns = ['SPY']
     return spy_portfolio_df
 
+
 def spy_portfolio(all_transactions_df: pd.DataFrame, spy_close_df: pd.DataFrame, initial_holdings: float) -> pd.DataFrame:
+    """
+    :param all_transactions_df:
+    :param spy_close_df:
+    :param initial_holdings:
+    :return: a SPY portfolio relative to the time period in the pairs trading simulation and the initial investment.
+    """
     transaction_dates = all_transactions_df['day_date']
     transaction_index = pd.to_datetime(transaction_dates.values)
     trans_first_date = transaction_index[0]
@@ -1481,10 +1560,11 @@ plt.show()
 spy_portfolio_df = spy_portfolio(all_transactions_df=all_transactions_df, spy_close_df=spy_close_df, initial_holdings=initial_holdings)
 
 profit_portfolio_df = day_profit_portfolio(all_transactions_df=all_transactions_df, initial_holdings=initial_holdings)
+random_portfolio_df = day_profit_portfolio(all_transactions_df=all_rand_transactions_df, initial_holdings=initial_holdings)
 
-plot_two_dataframes(one_df=spy_portfolio_df, two_df=profit_portfolio_df, colors=['blue', 'orange'], label_one='SPY Portfolio',
-                    label_two='Pairs Portfolio', x_label='Date', y_label='Portfolio Value',
-                    title='Pairs Portfolio and SPY Portfolio')
+plot_dataframes(df_list=[spy_portfolio_df, profit_portfolio_df, random_portfolio_df], colors=['blue', 'green', 'orange'],
+                labels=['SPY', 'Pairs', 'Random Pairs'], x_label='Date', y_label='Portfolio Value',
+                    title='Pairs, Random Pairs and SPY Portfolio')
 
 def yearly_return(portfolio_df: pd.DataFrame) -> pd.DataFrame:
     first_row = True
@@ -1518,6 +1598,12 @@ def yearly_return(portfolio_df: pd.DataFrame) -> pd.DataFrame:
 portfolio_yearly_return_df = yearly_return(profit_portfolio_df)
 spy_yearly_return_df = yearly_return(spy_portfolio_df)
 portfolio_returns_df = pd.concat([portfolio_yearly_return_df, spy_yearly_return_df], axis=1)
+
+port_stats_df = pd.concat([pd.DataFrame(portfolio_returns_df.mean()), pd.DataFrame(portfolio_returns_df.median())], axis=1).transpose()
+port_stats_df.index = ['Mean', 'Median']
+
+portfolio_returns_df =  pd.concat([portfolio_returns_df, port_stats_df], axis=0)
+
 print(tabulate(portfolio_returns_df, headers=[*portfolio_returns_df.columns], tablefmt='fancy_grid'))
 
 
@@ -1571,9 +1657,8 @@ def plot_period_return(spy_close_df: pd.DataFrame,
     profit_portfolio_period.index = profit_index
     profit_portfolio_period.columns = ['Pairs Portfolio']
 
-    plot_two_dataframes(one_df=spy_period, two_df=profit_portfolio_period,
-                        colors=['orange', 'blue'], label_one='SPY', label_two='Pairs', x_label='Date',
-                        y_label='Dollars', title=title)
+    plot_dataframes(df_list=[spy_period, profit_portfolio_period], colors=['orange', 'blue'], labels=['SPY', 'Pairs'],
+                    x_label='Date', y_label='Dollars', title=title)
 
 
 transaction_date_index = pd.to_datetime(transaction_dates)
