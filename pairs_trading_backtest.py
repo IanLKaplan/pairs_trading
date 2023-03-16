@@ -1548,14 +1548,14 @@ def plot_hist(values_df: pd.DataFrame, x_label: str, y_label: str, title: str, a
     plt.show()
 
 
-transaction_dates = all_transactions_df['day_date']
-
-transaction_return_df = all_transactions_df['day_return']
-transaction_return_index = pd.to_datetime(transaction_dates.values)
-transaction_return_df.index = transaction_return_index
-
-transaction_return_df.plot(grid=True, title='Pairs Trading Returns', figsize=(10, 6))
-plt.show()
+# transaction_dates = all_transactions_df['day_date']
+#
+# transaction_return_df = all_transactions_df['day_return']
+# transaction_return_index = pd.to_datetime(transaction_dates.values)
+# transaction_return_df.index = transaction_return_index
+#
+# transaction_return_df.plot(grid=True, title='Pairs Trading Returns', figsize=(10, 6))
+# plt.show()
 
 spy_portfolio_df = spy_portfolio(all_transactions_df=all_transactions_df, spy_close_df=spy_close_df, initial_holdings=initial_holdings)
 
@@ -1661,6 +1661,7 @@ def plot_period_return(spy_close_df: pd.DataFrame,
                     x_label='Date', y_label='Dollars', title=title)
 
 
+transaction_dates = all_transactions_df['day_date']
 transaction_date_index = pd.to_datetime(transaction_dates)
 trans_end_date = transaction_date_index.iloc[-1]
 period_start = trans_end_date - relativedelta(years=5)
