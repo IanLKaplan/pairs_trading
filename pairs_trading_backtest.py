@@ -641,32 +641,12 @@ plot_mean_spread(pair=pair, close_prices_df=close_prices_df, start_ix=window_out
 plt.show()
 
 
-def pairs_stock_distrubtion(coint_pairs: List[CointData]) -> List[int]:
 
-    def incr_stock_count(sym: str, map: Dict[str, int]) -> None:
-        count: int = 0
-        if sym in map:
-            count = map[sym]
-        count += 1
-        map[sym] = count
-
-    pairs_map: Dict[str, int] = dict()
-    for pair_info in coint_pairs:
-        count: int = 0
-        incr_stock_count(pair_info.stock_a, pairs_map)
-        incr_stock_count(pair_info.stock_b, pairs_map)
-    dist_list: List[int] = pairs_map.values()
-    return dist_list
-
-
-
-dist_list = pairs_stock_distrubtion(coint_pairs=coint_list)
-
-plt.hist(dist_list, bins='auto')
-plt.title('Number of Pairs per Stock')
-plt.xlabel('Stocks per Pair')
-plt.ylabel('Number of Pairs')
-plt.show()
+# plt.bar(list(count_map.keys()), count_map.values(), color='g')
+# plt.title('Number of Pairs per Stock')
+# plt.xlabel('Stocks per Pair')
+# plt.ylabel('Number of Pairs')
+# plt.show()
 
 
 class OpenPosition(Enum):
@@ -1212,10 +1192,34 @@ class HistoricalBacktest:
             day_trans_df = pd.DataFrame(trans.__dict__ for trans in day_transactions_l)
         return holdings, day_trans_df
 
+    def pairs_stock_distribution(self, coint_pairs: List[CointData], count_map: Dict[int, int]) -> None:
+
+        def incr_stock_count(sym: str, map: Dict[str, int]) -> None:
+            count: int = 0
+            if sym in map:
+                count = map[sym]
+            count += 1
+            map[sym] = count
+
+        pairs_map: Dict[str, int] = dict()
+        for pair_info in coint_pairs:
+            count: int = 0
+            incr_stock_count(pair_info.stock_a, pairs_map)
+            incr_stock_count(pair_info.stock_b, pairs_map)
+        # dist_list contains a count of the number times a stock is found in a pair
+        dist_list: List[int] = list(pairs_map.values())
+        # summarize by counting the number of times a stock is in only one pair, two pairs, etc...
+        for pair_count in dist_list:
+            count: int = 0
+            if pair_count in count_map:
+                count = count_map[pair_count]
+            count += 1
+            count_map[pair_count] = count
+
     def historical_backtest(self,
                             close_prices_df: pd.DataFrame,
                             start_date: datetime,
-                            delta: float) -> Tuple[pd.DataFrame, pd.DataFrame]:
+                            delta: float) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         date_index = close_prices_df.index
         start_ix = find_date_index.findDateIndex(date_index, start_date)
         assert start_ix >= 0
@@ -1223,6 +1227,7 @@ class HistoricalBacktest:
         print(f'index range: {start_ix} - end_ix: {end_ix}')
         all_transactions_df = pd.DataFrame()
         holdings_l: List[float] = list()
+        count_map: Dict[int, int] = dict()
         holdings_date_l = list()
         holdings = self.initial_holdings
         for ix in range(start_ix, end_ix - (self.in_sample_days + self.out_of_sample_days), self.out_of_sample_days):
@@ -1238,6 +1243,7 @@ class HistoricalBacktest:
                 f'out-of-sample: {out_of_sample_start}:{out_of_sample_end} {out_of_sample_date_start}:{out_of_sample_date_end}')
             in_sample_close_df = pd.DataFrame(close_prices_df.iloc[ix:in_sample_end_ix])
             selected_pairs: List[CointData] = self.in_sample_pairs_obj.get_in_sample_pairs(pairs_list=self.pairs_list, close_prices=in_sample_close_df)
+            self.pairs_stock_distribution(coint_pairs=selected_pairs, count_map=count_map)
             out_of_sample_df = pd.DataFrame(close_prices_df.iloc[out_of_sample_start:out_of_sample_end])
             holdings, day_transactions_df = self.out_of_sample_test(start_ix=self.back_window,
                                                                     out_of_sample_df=out_of_sample_df,
@@ -1251,7 +1257,9 @@ class HistoricalBacktest:
         holdings_df = pd.DataFrame(holdings_l)
         holdings_df.index = holdings_date_l
         holdings_df.columns = ['portfolio balance']
-        return all_transactions_df, holdings_df
+        pairs_stock_count_df = pd.DataFrame([list(count_map.keys()), count_map.values()]).transpose()
+        pairs_stock_count_df.columns = ['pairs', 'count']
+        return all_transactions_df, holdings_df, pairs_stock_count_df
 
 
 class ReturnCalculation:
@@ -1284,13 +1292,18 @@ faulthandler.enable()
 
 pairs_result_dir = 'back_test_data'
 pairs_result_file = 'pairs_backtest.csv'
+pairs_count_file = 'pairs_count.csv'
 rand_pairs_result_file = 'rand_pairs_backtest.csv'
 pairs_holdings_file = 'holdings.csv'
 rand_pairs_holdings_file = 'rand_holdings.csv'
+rand_pairs_count_file = 'rand_pairs_count'
+
 pairs_result_path = pairs_result_dir + os.path.sep + pairs_result_file
 holdings_path = pairs_result_dir + os.path.sep + pairs_holdings_file
+pairs_count_path = pairs_result_dir + os.path.sep + pairs_count_file
 rand_pairs_result_path = pairs_result_dir + os.path.sep + rand_pairs_result_file
 rand_holdings_path = pairs_result_dir + os.path.sep + rand_pairs_holdings_file
+rand_pairs_count_path = pairs_result_dir + os.path.sep + rand_pairs_count_file
 
 
 day_limit = 15
@@ -1309,11 +1322,12 @@ if not os.path.exists(pairs_result_path):
                                              delta=delta,
                                              day_limit=day_limit,
                                              in_sample_pairs_obj=in_sample_pair_obj)
-    all_transactions_df, holdings_df = historical_backtest.historical_backtest(close_prices_df=close_prices_df,
+    all_transactions_df, holdings_df, pairs_count_df = historical_backtest.historical_backtest(close_prices_df=close_prices_df,
                                                                                start_date=start_date,
                                                                                delta=delta)
     all_transactions_df.to_csv(pairs_result_path)
     holdings_df.to_csv(holdings_path)
+    pairs_count_df.to_csv(pairs_count_path)
 
     in_sample_random_pair_obj = RandomInSamplePairs(corr_cutoff=corr_cutoff, num_pairs=num_pairs)
     random_historical_backtest = HistoricalBacktest(pairs_list=pairs_list,
@@ -1325,17 +1339,35 @@ if not os.path.exists(pairs_result_path):
                                              delta=delta,
                                              day_limit=day_limit,
                                              in_sample_pairs_obj=in_sample_random_pair_obj)
-    all_rand_transactions_df, rand_holdings_df = random_historical_backtest.historical_backtest(close_prices_df=close_prices_df,
+    all_rand_transactions_df, rand_holdings_df, rand_pairs_count_df = random_historical_backtest.historical_backtest(close_prices_df=close_prices_df,
                                                                                start_date=start_date,
                                                                                delta=delta)
     all_rand_transactions_df.to_csv(rand_pairs_result_path)
     rand_holdings_df.to_csv(rand_holdings_path)
+    rand_pairs_count_df.to_csv(rand_pairs_count_path)
 else:
     all_transactions_df = pd.read_csv(pairs_result_path, index_col=0)
     all_rand_transactions_df = pd.read_csv(rand_pairs_result_path, index_col=0)
     holdings_df = pd.read_csv(holdings_path, index_col=0)
+    rand_holdings_df = pd.read_csv(rand_holdings_path, index_col=0)
+    pairs_count_df = pd.read_csv(pairs_count_path, index_col=0)
+    rand_pairs_count_df = pd.read_csv(rand_pairs_count_path, index_col=0)
 
 
+# plt.bar(list(count_map.keys()), count_map.values(), color='g')
+# plt.title('Number of Pairs per Stock')
+# plt.xlabel('Stocks per Pair')
+# plt.ylabel('Number of Pairs')
+# plt.show()
+
+pairs_count_percent_s = round((pairs_count_df['count']/pairs_count_df['count'].sum()) * 100, 2)
+plt.bar(pairs_count_df['pairs'], pairs_count_percent_s, color='g')
+plt.xticks(range(1, pairs_count_df['pairs'].max()+1))
+plt.xlabel('Pairs with Unique Stocks')
+plt.ylabel('Percent')
+plt.show()
+
+pass
 # all_transactions_df has the following columns:
 # 'day_date', 'positive_trades', 'negative_trades', 'days_open',
 #        'day_profit', 'day_return', 'num_open_positions', 'margin'
