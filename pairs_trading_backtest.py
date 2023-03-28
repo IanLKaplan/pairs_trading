@@ -1236,11 +1236,10 @@ class HistoricalBacktest:
             in_sample_date_end = date_index[in_sample_end_ix]
             out_of_sample_start = in_sample_end_ix - self.back_window
             out_of_sample_end = in_sample_end_ix + self.out_of_sample_days
-            out_of_sample_date_start = date_index[out_of_sample_start]
             out_of_sample_date_end = date_index[out_of_sample_end]
             print(f'in-sample: {ix}:{in_sample_end_ix} {in_sample_date_start}:{in_sample_date_end}')
             print(
-                f'out-of-sample: {out_of_sample_start}:{out_of_sample_end} {out_of_sample_date_start}:{out_of_sample_date_end}')
+                f'out-of-sample: {in_sample_end_ix}:{out_of_sample_end} dates:{date_index[in_sample_end_ix]}:{date_index[out_of_sample_end]}')
             in_sample_close_df = pd.DataFrame(close_prices_df.iloc[ix:in_sample_end_ix])
             selected_pairs: List[CointData] = self.in_sample_pairs_obj.get_in_sample_pairs(pairs_list=self.pairs_list, close_prices=in_sample_close_df)
             self.pairs_stock_distribution(coint_pairs=selected_pairs, count_map=count_map)
@@ -1306,8 +1305,10 @@ rand_holdings_path = pairs_result_dir + os.path.sep + rand_pairs_holdings_file
 rand_pairs_count_path = pairs_result_dir + os.path.sep + rand_pairs_count_file
 
 
-day_limit = 15
 initial_holdings = 100000
+out_of_sample_days = quarter // 2
+back_window = quarter // 3
+day_limit = 10
 
 if not os.path.exists(pairs_result_dir):
     os.mkdir(pairs_result_dir)
@@ -1317,8 +1318,8 @@ if not os.path.exists(pairs_result_path):
                                              initial_holdings=initial_holdings,
                                              num_pairs=num_pairs,
                                              in_sample_days=half_year,
-                                             out_of_sample_days=quarter,
-                                             back_window=quarter // 3,
+                                             out_of_sample_days=out_of_sample_days,
+                                             back_window=back_window,
                                              delta=delta,
                                              day_limit=day_limit,
                                              in_sample_pairs_obj=in_sample_pair_obj)
@@ -1334,8 +1335,8 @@ if not os.path.exists(pairs_result_path):
                                              initial_holdings=initial_holdings,
                                              num_pairs=num_pairs,
                                              in_sample_days=half_year,
-                                             out_of_sample_days=quarter,
-                                             back_window=quarter // 3,
+                                             out_of_sample_days=out_of_sample_days,
+                                             back_window=back_window,
                                              delta=delta,
                                              day_limit=day_limit,
                                              in_sample_pairs_obj=in_sample_random_pair_obj)
@@ -1367,7 +1368,6 @@ plt.xlabel('Pairs with Unique Stocks')
 plt.ylabel('Percent')
 plt.show()
 
-pass
 # all_transactions_df has the following columns:
 # 'day_date', 'positive_trades', 'negative_trades', 'days_open',
 #        'day_profit', 'day_return', 'num_open_positions', 'margin'
